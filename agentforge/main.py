@@ -82,7 +82,8 @@ async def process_query(request: QueryRequest):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    """Health check endpoint for container orchestration."""
+    return {"status": "healthy", "version": "1.0.0"}
 
 @app.get("/agents")
 async def list_agents():

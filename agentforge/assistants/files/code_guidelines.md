@@ -1,6 +1,7 @@
 # Code Review and Development Guidelines
 
 ## Code Review Checklist
+
 - Check for proper error handling and edge cases
 - Ensure code follows language-specific best practices
 - Look for potential security vulnerabilities
@@ -10,6 +11,7 @@
 - Verify test coverage
 
 ## Debugging Guidelines
+
 - Analyze error messages and stack traces
 - Check common error patterns
 - Verify variable states and data flow
@@ -18,6 +20,7 @@
 - Verify API usage and integration points
 
 ## Implementation Best Practices
+
 - Follow SOLID principles
 - Use proper design patterns
 - Implement proper error handling
@@ -31,12 +34,14 @@
 ## Core Competencies
 
 ### 1. Programming Languages
+
 - Python, JavaScript/TypeScript, Java, C++, Go
 - Web technologies (HTML, CSS, React, Node.js)
 - Database languages (SQL, MongoDB queries)
 - Shell scripting (Bash, PowerShell)
 
 ### 2. Development Tasks
+
 - Code implementation
 - Debugging and troubleshooting
 - Performance optimization
@@ -44,6 +49,7 @@
 - API design and integration
 
 ### 3. Software Architecture
+
 - Design patterns
 - System architecture
 - Microservices
@@ -53,6 +59,7 @@
 ## Code Review Guidelines
 
 ### 1. Code Quality
+
 - Clean code principles
 - SOLID principles
 - DRY (Don't Repeat Yourself)
@@ -60,6 +67,7 @@
 - YAGNI (You Aren't Gonna Need It)
 
 ### 2. Performance
+
 - Time complexity analysis
 - Space complexity analysis
 - Memory management
@@ -67,6 +75,7 @@
 - Caching strategies
 
 ### 3. Security
+
 - Input validation
 - Authentication/Authorization
 - Data encryption
@@ -74,6 +83,7 @@
 - Common vulnerabilities (OWASP)
 
 ### 4. Testing
+
 - Unit tests
 - Integration tests
 - End-to-end tests
@@ -83,6 +93,7 @@
 ## Debugging Protocol
 
 ### 1. Error Analysis
+
 1. Read error message carefully
 2. Identify error type and location
 3. Check stack trace
@@ -90,6 +101,7 @@
 5. Consider common causes
 
 ### 2. Investigation Steps
+
 1. Reproduce the issue
 2. Add logging/debugging statements
 3. Check variable states
@@ -97,6 +109,7 @@
 5. Test assumptions
 
 ### 3. Solution Approach
+
 1. Identify root cause
 2. Consider multiple solutions
 3. Evaluate trade-offs
@@ -107,6 +120,7 @@
 ## Implementation Best Practices
 
 ### 1. Code Organization
+
 ```python
 # File structure
 project/
@@ -145,6 +159,7 @@ def my_function(param: str) -> bool:
 ```
 
 ### 2. Naming Conventions
+
 - Classes: PascalCase
 - Functions/Methods: snake_case
 - Variables: snake_case
@@ -152,6 +167,7 @@ def my_function(param: str) -> bool:
 - Private members: _prefix
 
 ### 3. Documentation
+
 - Module docstrings
 - Class docstrings
 - Function docstrings
@@ -159,6 +175,7 @@ def my_function(param: str) -> bool:
 - Inline comments for complex logic
 
 ### 4. Error Handling
+
 ```python
 try:
     # Specific operation that might fail
@@ -175,6 +192,7 @@ finally:
 ## API Design Principles
 
 ### 1. RESTful APIs
+
 - Use appropriate HTTP methods
 - Follow resource naming conventions
 - Implement proper status codes
@@ -182,6 +200,7 @@ finally:
 - Version your APIs
 
 ### 2. GraphQL APIs
+
 - Schema design
 - Query optimization
 - Mutation handling
@@ -189,6 +208,7 @@ finally:
 - Error handling
 
 ### 3. Authentication
+
 - JWT implementation
 - OAuth 2.0 flow
 - API key management
@@ -198,6 +218,7 @@ finally:
 ## Performance Optimization
 
 ### 1. Code Level
+
 - Algorithm efficiency
 - Data structure selection
 - Memory management
@@ -205,6 +226,7 @@ finally:
 - Async/await patterns
 
 ### 2. Database
+
 - Query optimization
 - Indexing
 - Connection pooling
@@ -212,6 +234,7 @@ finally:
 - Batch operations
 
 ### 3. System Level
+
 - Load balancing
 - Caching layers
 - Message queues
@@ -221,6 +244,7 @@ finally:
 ## Security Guidelines
 
 ### 1. Input Validation
+
 ```python
 def validate_user_input(data: Dict[str, Any]) -> bool:
     """Validate user input against security rules"""
@@ -233,6 +257,7 @@ def validate_user_input(data: Dict[str, Any]) -> bool:
 ```
 
 ### 2. Authentication
+
 - Password hashing
 - Session management
 - Token validation
@@ -240,6 +265,7 @@ def validate_user_input(data: Dict[str, Any]) -> bool:
 - Rate limiting
 
 ### 3. Data Protection
+
 - Encryption at rest
 - Encryption in transit
 - PII handling
@@ -249,6 +275,7 @@ def validate_user_input(data: Dict[str, Any]) -> bool:
 ## Testing Strategy
 
 ### 1. Unit Tests
+
 ```python
 def test_user_validation():
     """Test user input validation"""
@@ -261,6 +288,7 @@ def test_user_validation():
 ```
 
 ### 2. Integration Tests
+
 - API endpoints
 - Database operations
 - External services
@@ -268,6 +296,7 @@ def test_user_validation():
 - Error scenarios
 
 ### 3. Performance Tests
+
 - Load testing
 - Stress testing
 - Endurance testing
@@ -277,6 +306,7 @@ def test_user_validation():
 ## Version Control
 
 ### 1. Git Best Practices
+
 - Clear commit messages
 - Feature branching
 - Pull request reviews
@@ -284,6 +314,7 @@ def test_user_validation():
 - Release tagging
 
 ### 2. Workflow
+
 1. Create feature branch
 2. Make focused commits
 3. Write tests
@@ -295,6 +326,7 @@ def test_user_validation():
 ## Continuous Integration/Deployment
 
 ### 1. CI Pipeline
+
 - Automated testing
 - Code quality checks
 - Security scanning
@@ -302,6 +334,7 @@ def test_user_validation():
 - Version management
 
 ### 2. CD Pipeline
+
 - Environment management
 - Deployment automation
 - Rollback procedures
@@ -311,6 +344,7 @@ def test_user_validation():
 ## Response Format
 
 ### 1. Code Solutions
+
 ```python
 # Problem: [Brief description]
 # Solution approach:
@@ -328,6 +362,7 @@ def solution():
 ```
 
 ### 2. Error Resolution
+
 ```
 Error: [Error message]
 Cause: [Explanation]
@@ -341,6 +376,7 @@ Prevention:
 ```
 
 ### 3. Code Review
+
 ```
 File: [filename]
 Review comments:
@@ -352,4 +388,4 @@ Review comments:
 Overall recommendations:
 - [Recommendation 1]
 - [Recommendation 2]
-``` 
+```

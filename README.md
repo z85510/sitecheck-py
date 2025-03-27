@@ -23,12 +23,14 @@ For production use, please use the latest tagged release or the stable branch.
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.11+ or Docker
 - OpenAI API key
 - Anthropic API key (optional)
 - macOS/Linux (ARM64 compatible)
 
 ## Installation
+
+### Option 1: Local Installation
 
 1. Clone the repository:
 ```bash
@@ -52,6 +54,67 @@ pip install -r requirements.txt
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key  # Optional
 ```
+
+### Option 2: Docker Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/sitecheck-py.git
+cd sitecheck-py
+```
+
+2. Create a `.env` file with your API keys:
+```bash
+OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key  # Optional
+```
+
+3. Build and run with Docker Compose:
+```bash
+docker-compose up --build
+```
+
+Or build and run with Docker:
+```bash
+docker build -t sitecheck .
+docker run -p 8001:8001 --env-file .env sitecheck
+```
+
+## Cloud Deployment
+
+### Azure Container Apps
+
+1. Build and push to Azure Container Registry:
+```bash
+az acr build --registry <registry-name> --image sitecheck:v1.0.0 .
+```
+
+2. Deploy to Azure Container Apps:
+```bash
+az containerapp create \
+  --name sitecheck \
+  --resource-group <resource-group> \
+  --image <registry-name>.azurecr.io/sitecheck:v1.0.0 \
+  --target-port 8001 \
+  --ingress external \
+  --env-vars OPENAI_API_KEY=<your-key> ANTHROPIC_API_KEY=<your-key>
+```
+
+### AWS ECS
+
+1. Build and push to Amazon ECR:
+```bash
+aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <aws-account>.dkr.ecr.<region>.amazonaws.com
+docker build -t sitecheck .
+docker tag sitecheck:latest <aws-account>.dkr.ecr.<region>.amazonaws.com/sitecheck:v1.0.0
+docker push <aws-account>.dkr.ecr.<region>.amazonaws.com/sitecheck:v1.0.0
+```
+
+2. Deploy using AWS ECS (Fargate):
+- Create an ECS cluster
+- Create a task definition using the ECR image
+- Create a service with the task definition
+- Configure environment variables in the task definition
 
 ## Usage
 
