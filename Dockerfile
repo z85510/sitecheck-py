@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
   gcc \
   python3-dev \
   curl \
+  build-essential \
+  pkg-config \
+  cmake \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -23,9 +26,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install curl for health checks
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
   curl \
+  sqlite3 \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder stage
@@ -39,6 +43,10 @@ ENV PATH="/opt/venv/bin:$PATH" \
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
   chown -R appuser:appuser /app
+
+# Create and set permissions for vectordb directory
+RUN mkdir -p /app/vectordb && \
+  chown -R appuser:appuser /app/vectordb
 
 # Copy application code
 COPY --chown=appuser:appuser . .

@@ -3,7 +3,7 @@ import json
 import hashlib
 from typing import Dict, Any, List, Optional
 from langchain_openai import OpenAIEmbeddings
-from langchain_chroma import Chroma
+from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import (
     PyPDFLoader,
     Docx2txtLoader,
@@ -26,7 +26,7 @@ class DocumentManager:
         
         # Initialize embeddings and vector store
         self.embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-        self.vectordb = Chroma(
+        self.vectorstore = Chroma(
             collection_name=collection_name,
             embedding_function=self.embeddings,
             persist_directory=os.path.join(base_path, "vectordb")
@@ -108,7 +108,7 @@ class DocumentManager:
                 split.metadata["assistant"] = assistant_name
             
             # Add to vector store
-            self.vectordb.add_documents(splits)
+            self.vectorstore.add_documents(splits)
             
             # Update metadata
             self.metadata[file_key] = {
@@ -182,7 +182,7 @@ class DocumentManager:
             }
             
         # Query vector store
-        docs = self.vectordb.similarity_search(
+        docs = self.vectorstore.similarity_search(
             query,
             k=num_results,
             filter=filter_dict if filter_dict else None
