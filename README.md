@@ -2,6 +2,17 @@
 
 A powerful AI-powered construction safety and management assistant built with FastAPI and modern AI models.
 
+## Version Information
+
+Current stable version: v1.0.0
+
+### Branches
+- `main`: Main branch containing the latest stable release
+- `v1.0-stable`: Stable branch for version 1.0.x
+- `develop`: Development branch for upcoming features
+
+For production use, please use the latest tagged release or the stable branch.
+
 ## Features
 
 - 🤖 Intelligent query routing and processing
