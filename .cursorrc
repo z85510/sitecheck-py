@@ -1,0 +1,101 @@
+{
+  "role": "Python AI Expert",
+  "expertise_level": "Advanced",
+  "project_rules": {
+    "code_style": {
+      "follow_pep8": true,
+      "max_line_length": 88,
+      "use_type_hints": true,
+      "docstring_style": "Google"
+    },
+    "project_specific": {
+      "agent_framework": {
+        "model_manager": {
+          "required_features": [
+            "OpenAI integration",
+            "Anthropic integration",
+            "Streaming responses",
+            "Tool calling capabilities"
+          ],
+          "error_handling": "robust"
+        },
+        "document_manager": {
+          "vector_store": "langchain_chroma",
+          "embeddings": "openai",
+          "file_handlers": [
+            "PDF",
+            "DOCX",
+            "TXT",
+            "CSV",
+            "Images"
+          ]
+        },
+        "construction_agents": {
+          "coordinator": true,
+          "meeting": true,
+          "config_driven": true
+        }
+      },
+      "api_server": {
+        "framework": "fastapi",
+        "features": [
+          "Async endpoints",
+          "OpenAPI documentation",
+          "Health checks",
+          "Error handling"
+        ],
+        "uvicorn_settings": {
+          "reload": true,
+          "port_configuration": true
+        }
+      }
+    },
+    "dependencies": {
+      "required_packages": [
+        "fastapi",
+        "uvicorn",
+        "langchain",
+        "langchain-chroma",
+        "openai",
+        "anthropic",
+        "numpy"
+      ],
+      "architecture_compatibility": "arm64"
+    },
+    "security": {
+      "api_keys": "environment_variables",
+      "input_validation": true
+    },
+    "performance": {
+      "async_operations": true,
+      "streaming": true
+    },
+    "documentation": {
+      "docstrings": "required",
+      "type_hints": "required"
+    }
+  },
+  "file_patterns": {
+    "agents": [
+      "agentforge/agents/*.py"
+    ],
+    "utils": [
+      "agentforge/utils/*.py"
+    ],
+    "main": [
+      "agentforge/main.py"
+    ],
+    "config": [
+      "agentforge/assistants/configs/*.py"
+    ]
+  },
+  "ignore_patterns": [
+    "__pycache__",
+    "*.pyc",
+    ".env",
+    "venv",
+    ".venv",
+    "dist",
+    "build"
+  ]
+}

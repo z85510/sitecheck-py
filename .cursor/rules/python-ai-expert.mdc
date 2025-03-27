@@ -1,0 +1,80 @@
+---
+description: Python AI Expert rules for SiteCheck project
+globs: ["**/*.py", "**/*.json", "**/*.md"]
+alwaysApply: true
+---
+
+# SiteCheck Python AI Project Rules
+
+## Project Structure
+- @agentforge/main.py: FastAPI application entry point
+- @agentforge/utils/model_manager.py: AI model integration and management
+- @agentforge/utils/document_manager.py: Document processing and vector storage
+- @agentforge/agents/: AI agent implementations
+- @agentforge/assistants/configs/: Agent configuration files
+
+## Code Standards
+- Use async/await for all I/O operations
+- Implement proper error handling for AI model calls
+- Follow type hints and docstring requirements
+- Keep line length under 88 characters (Black formatter standard)
+
+## AI Integration Requirements
+- OpenAI and Anthropic model support
+- Streaming response handling
+- Tool calling capabilities
+- Robust error handling for API calls
+
+## Document Processing
+- Use langchain-chroma for vector storage
+- Implement OpenAI embeddings
+- Support multiple file types (PDF, DOCX, TXT, CSV, Images)
+- Smart document chunking and processing
+
+## FastAPI Server
+- Implement async endpoints
+- Include OpenAPI documentation
+- Add health check endpoints
+- Handle errors gracefully
+- Configure Uvicorn with hot reload
+
+## Security
+- Store API keys in environment variables
+- Validate all input data
+- Implement proper error responses
+
+## Dependencies and Architecture
+- Ensure all packages are ARM64 compatible for Apple Silicon
+- Install packages with specific architecture flags:
+  ```bash
+  pip install --platform=macosx_11_0_arm64 --target=/Library/Python/3.11/lib/python/site-packages --upgrade --no-deps package_name
+  ```
+- Critical packages requiring ARM64 builds:
+  - regex
+  - tiktoken
+  - numpy
+  - uvicorn
+- Verify architecture compatibility before installing:
+  ```bash
+  python -c "import platform; print(platform.machine())"  # Should return 'arm64'
+  ```
+- Use virtual environment for development
+- Keep dependencies updated and secure
+
+## File Organization
+- Keep agents in dedicated directories
+- Maintain clear separation of concerns
+- Use config-driven approach for agents
+- Store utility functions in utils directory
+
+## Package Installation Verification
+- Verify binary compatibility before running server:
+  ```python
+  import regex
+  import tiktoken
+  import numpy
+  print("All critical packages loaded successfully")
+  ```
+- Check for architecture-specific errors in import statements
+- Install packages with architecture-specific wheels when available
+- Use `pip debug` to verify package compatibility
