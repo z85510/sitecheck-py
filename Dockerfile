@@ -52,21 +52,26 @@ RUN mkdir -p /app/vectordb && \
 COPY --chown=appuser:appuser . .
 
 # Create entrypoint script
-COPY --chown=appuser:appuser <<EOF /app/entrypoint.sh
-#!/bin/bash
-set -e
-
-# Check for required environment variables
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "Error: OPENAI_API_KEY environment variable is required"
-    exit 1
-fi
-
-# Start the application
-exec uvicorn agentforge.main:app --host 0.0.0.0 --port 8001
-EOF
-
-RUN chmod +x /app/entrypoint.sh
+RUN echo '#!/bin/bash\n\
+  set -e\n\
+  \n\
+  # Check for required environment variables\n\
+  if [ -z "$OPENAI_API_KEY" ]; then\n\
+  echo "Error: OPENAI_API_KEY environment variable is required"\n\
+  exit 1\n\
+  fi\n\
+  \n\
+  # Set default values for optional environment variables\n\
+  export HOST=${HOST:-0.0.0.0}\n\
+  export PORT=${PORT:-8001}\n\
+  export LOG_LEVEL=${LOG_LEVEL:-INFO}\n\
+  export COLLECTION_NAME=${COLLECTION_NAME:-sitecheck}\n\
+  export VECTORDB_PATH=${VECTORDB_PATH:-/app/vectordb}\n\
+  \n\
+  # Start the application\n\
+  exec uvicorn agentforge.main:app --host "$HOST" --port "$PORT" --log-level "${LOG_LEVEL,,}"\n\
+  ' > /app/entrypoint.sh && \
+  chmod +x /app/entrypoint.sh
 
 # Switch to non-root user
 USER appuser
