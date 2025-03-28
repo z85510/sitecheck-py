@@ -1,300 +1,316 @@
-from typing import Dict, Any, List, Optional, AsyncGenerator
-import openai
-from openai import AsyncOpenAI
-from anthropic import AsyncAnthropic
+from typing import Dict, Any, List, Optional, AsyncGenerator, Tuple, Union
+import logging
 import json
+from openai import AsyncOpenAI, BadRequestError
+from anthropic import AsyncAnthropic
 import os
 
+logger = logging.getLogger(__name__)
+
 class ModelManager:
+    """Manages AI model interactions and API keys."""
+    
     def __init__(
         self,
         openai_api_key: Optional[str] = None,
         anthropic_api_key: Optional[str] = None
     ):
-        self.openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
-        self.anthropic_client = AsyncAnthropic(api_key=anthropic_api_key) if anthropic_api_key else None
-        
-        if not (self.openai_client or self.anthropic_client):
-            raise ValueError("At least one of OpenAI or Anthropic API key must be provided")
-        
-        # Define available models and their capabilities
-        self.models = {
-            # Reasoning Models (o-series)
-            "o3-mini": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "o3-mini",
-                "priority": 1,  # Highest priority
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "reasoning"
-            },
-            "o1": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "o1",
-                "priority": 2,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "reasoning"
-            },
-            "o1-mini": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "o1-mini",
-                "priority": 3,
-                "default_temperature": 0.1,
-                "type": "default",
-                "category": "reasoning"
-            },
-            "o1-pro": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 16384,
-                "temperature_range": (0.0, 2.0),
-                "alias": "o1-pro",
-                "priority": 4,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "reasoning"
-            },
-
-            # Flagship Chat Models
-            "gpt-4.5-preview": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 32768,
-                "temperature_range": (0.0, 2.0),
-                "alias": "gpt-45",
-                "priority": 5,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "flagship"
-            },
-            "gpt-4o": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "gpt-4o",
-                "priority": 6,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "flagship"
-            },
-
-            # Cost-optimized Models
-            "gpt-4o-mini": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "gpt-4o-mini",
-                "priority": 7,
-                "default_temperature": 0.1,
-                "type": "default",
-                "category": "cost-optimized"
-            },
-
-            # Older GPT Models
-            "gpt-4-turbo": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "gpt-4t",
-                "priority": 8,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "legacy"
-            },
-            "gpt-4": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 8192,
-                "temperature_range": (0.0, 2.0),
-                "alias": "gpt-4",
-                "priority": 9,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "legacy"
-            },
-
-            # Claude Models
-            "claude-3-opus-20240229": {
-                "provider": "anthropic",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
-                "max_tokens": 4096,
-                "temperature_range": (0.0, 1.0),
-                "alias": "c3-opus",
-                "priority": 10,
-                "default_temperature": 0.1,
-                "type": "reasoning",
-                "category": "claude"
-            },
-            "claude-3-sonnet-20240229": {
-                "provider": "anthropic",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
-                "max_tokens": 4096,
-                "temperature_range": (0.0, 1.0),
-                "alias": "c3-sonnet",
-                "priority": 11,
-                "default_temperature": 0.1,
-                "type": "default",
-                "category": "claude"
-            },
-            "claude-3-haiku-20240229": {
-                "provider": "anthropic",
-                "capabilities": ["analysis", "conversation", "task_processing"],
-                "max_tokens": 4096,
-                "temperature_range": (0.0, 1.0),
-                "alias": "c3-haiku",
-                "priority": 12,
-                "default_temperature": 0.1,
-                "type": "default",
-                "category": "claude"
-            }
+        """Initialize the model manager with API keys."""
+        self.api_keys = {
+            "openai": openai_api_key,
+            "anthropic": anthropic_api_key
         }
-
-        # Create alias mapping
-        self.model_aliases = {
-            # Reasoning Models
-            "o3-mini": "o3-mini",
-            "o1": "o1",
-            "o1-mini": "o1-mini",
-            "o1-pro": "o1-pro",
+        
+        # Initialize OpenAI client if key is provided
+        self.openai_client = None
+        if openai_api_key:
+            self.openai_client = AsyncOpenAI(api_key=openai_api_key)
             
-            # Flagship Models
-            "gpt-45": "gpt-4.5-preview",
-            "gpt-4o": "gpt-4o",
+        # Initialize Anthropic client if key is provided
+        self.anthropic_client = None
+        if anthropic_api_key:
+            self.anthropic_client = AsyncAnthropic(api_key=anthropic_api_key)
             
-            # Cost-optimized Models
-            "gpt-4o-mini": "gpt-4o-mini",
-            
-            # Legacy Models
-            "gpt-4t": "gpt-4-turbo",
+        # Map model names to actual model identifiers
+        self.model_mapping = {
+            "o3-mini": "gpt-4-0125-preview",  # Latest GPT-4 Turbo
+            "o1": "gpt-4",
+            "o1-mini": "gpt-4",
+            "o1-pro": "gpt-4",
+            "gpt-4o": "gpt-4",
+            "gpt-4o-mini": "gpt-4",
+            "gpt-4-turbo": "gpt-4-0125-preview",
             "gpt-4": "gpt-4",
-            
-            # Claude Models
-            "c3-opus": "claude-3-opus-20240229",
-            "c3-sonnet": "claude-3-sonnet-20240229",
-            "c3-haiku": "claude-3-haiku-20240229"
+            "gpt-4.5-preview": "gpt-4-0125-preview"
         }
         
-    def select_model(
-        self,
-        task_type: str,
-        required_capabilities: List[str],
-        preferred_model: Optional[str] = None,
-        model_type: Optional[str] = None,  # "reasoning" or "default"
-        model_category: Optional[str] = None,  # "reasoning", "flagship", "cost-optimized", "legacy", "claude"
-        temperature: Optional[float] = None
-    ) -> Dict[str, Any]:
-        """Select the most appropriate model based on task requirements and preferences"""
-        
-        # Default to gpt-4 if no specific requirements
-        if not required_capabilities and not model_type and not model_category:
-            return {
-                "name": "gpt-4",
-                "provider": "openai",
-                "max_tokens": 8192,
-                "temperature": temperature if temperature is not None else 0.7,
-                "type": "default",
-                "category": "legacy"
-            }
-        
-        # If preferred model is specified, try to resolve alias
-        if preferred_model:
-            if preferred_model in self.model_aliases:
-                preferred_model = self.model_aliases[preferred_model]
-            if preferred_model in self.models:
-                model_specs = self.models[preferred_model]
-                # Check if we have access to this model's provider
-                if (model_specs["provider"] == "openai" and self.openai_client) or \
-                   (model_specs["provider"] == "anthropic" and self.anthropic_client):
-                    # Check if model has required capabilities and matches type/category if specified
-                    if all(cap in model_specs["capabilities"] for cap in required_capabilities) and \
-                       (not model_type or model_specs.get("type") == model_type) and \
-                       (not model_category or model_specs.get("category") == model_category):
-                        return {
-                            "name": preferred_model,
-                            "provider": model_specs["provider"],
-                            "max_tokens": model_specs["max_tokens"],
-                            "temperature": temperature if temperature is not None else model_specs.get("default_temperature", 0.7),
-                            "type": model_specs.get("type", "default"),
-                            "category": model_specs.get("category", "default")
-                        }
-        
-        # If no preferred model or preferred model not available, find suitable models
-        suitable_models = []
-        
-        for model_name, specs in self.models.items():
-            # Check if we have access to this model's provider
-            if specs["provider"] == "openai" and not self.openai_client:
-                continue
-            if specs["provider"] == "anthropic" and not self.anthropic_client:
-                continue
+        # Ensure at least one API key is provided
+        if not any(self.api_keys.values()):
+            raise ValueError("At least one of OpenAI or Anthropic API key must be provided")
             
-            # Check if model has all required capabilities and matches type/category if specified
-            if all(cap in specs["capabilities"] for cap in required_capabilities) and \
-               (not model_type or specs.get("type") == model_type) and \
-               (not model_category or specs.get("category") == model_category):
-                suitable_models.append((model_name, specs))
-        
-        # If no suitable models found, fall back to gpt-4
-        if not suitable_models:
-            return {
-                "name": "gpt-4",
-                "provider": "openai",
-                "max_tokens": 8192,
-                "temperature": temperature if temperature is not None else 0.7,
-                "type": "default",
-                "category": "legacy"
+        # Initialize available models
+        self.available_models = {
+            "openai": {
+                "gpt-4": {
+                    "type": "chat",
+                    "category": "openai",
+                    "capabilities": ["conversation", "analysis", "creation"]
+                },
+                "gpt-3.5-turbo": {
+                    "type": "chat",
+                    "category": "openai",
+                    "capabilities": ["conversation", "analysis"]
+                }
+            },
+            "anthropic": {
+                "claude-2": {
+                    "type": "chat",
+                    "category": "anthropic",
+                    "capabilities": ["conversation", "analysis", "creation"]
+                },
+                "claude-instant-1": {
+                    "type": "chat",
+                    "category": "anthropic",
+                    "capabilities": ["conversation"]
+                }
             }
+        }
         
-        # Sort by priority (lower number = higher priority)
-        suitable_models.sort(key=lambda x: x[1].get("priority", 999))
+        # Track active models
+        self.active_models = {}
+        for provider, key in self.api_keys.items():
+            if key:
+                self.active_models[provider] = self.available_models[provider]
+
+    def set_api_key(self, provider: str, key: str) -> None:
+        """Set an API key for a provider.
         
-        # Return the highest priority suitable model
-        selected_model, specs = suitable_models[0]
+        Args:
+            provider: The provider name (e.g., "openai", "anthropic")
+            key: The API key
+        """
+        if provider not in ["openai", "anthropic"]:
+            raise ValueError(f"Unsupported provider: {provider}")
+            
+        self.api_keys[provider] = key
+        if key:
+            self.active_models[provider] = self.available_models[provider]
+        elif provider in self.active_models:
+            del self.active_models[provider]
+
+    async def select_model(
+        self,
+        query: str = None,
+        preferred_model: str = None,
+        required_capabilities: List[str] = None,
+        temperature: float = 0.7,
+    ) -> Tuple[str, str]:
+        """
+        Legacy method for backward compatibility.
+        Selects the most appropriate model based on the query and requirements.
+        """
+        async for update in self.select_model_with_progress(
+            query=query,
+            preferred_model=preferred_model,
+            required_capabilities=required_capabilities,
+            temperature=temperature
+        ):
+            if update.get("type") == "model_selected":
+                model_info = update.get("model", {})
+                return model_info.get("name"), model_info.get("provider")
         
-        return {
-            "name": selected_model,
-            "provider": specs["provider"],
-            "max_tokens": specs["max_tokens"],
-            "temperature": temperature if temperature is not None else specs.get("default_temperature", 0.7),
-            "type": specs.get("type", "default"),
-            "category": specs.get("category", "default")
+        # Fallback to default model if no model was selected
+        return "gpt-4", "openai"  # Default to GPT-4 if available
+
+    async def select_model_with_progress(
+        self,
+        query: Optional[str] = None,
+        task_type: Optional[str] = None,
+        required_capabilities: Optional[List[str]] = None,
+        temperature: float = 0.7,
+        preferred_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        model_category: Optional[str] = None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Select the best model for a task with progress updates."""
+        yield {
+            "type": "workflow",
+            "step": "init",
+            "content": "🔄 Initializing model selection process..."
+        }
+
+        # If preferred model is specified and available, use it
+        if preferred_model:
+            yield {
+                "type": "workflow",
+                "step": "check_preferred",
+                "content": f"🔍 Checking availability of preferred model: {preferred_model}"
+            }
+            for provider, models in self.active_models.items():
+                if preferred_model in models:
+                    yield {
+                        "type": "workflow",
+                        "step": "selected",
+                        "content": f"✅ Selected preferred model: {preferred_model} from {provider}"
+                    }
+                    yield {
+                        "type": "model_selected",
+                        "model": {
+                            "name": preferred_model,
+                            "provider": provider,
+                            "temperature": temperature
+                        }
+                    }
+                    return
+
+        yield {
+            "type": "workflow",
+            "step": "filtering",
+            "content": "🔍 Filtering available models based on requirements..."
+        }
+                    
+        # Filter models by type and category if specified
+        available_models = {}
+        for provider, models in self.active_models.items():
+            for model_name, model_info in models.items():
+                if (not model_type or model_info["type"] == model_type) and \
+                   (not model_category or model_info["category"] == model_category):
+                    available_models[model_name] = {
+                        "info": model_info,
+                        "provider": provider
+                    }
+
+        # If no models match filters, use all active models
+        if not available_models:
+            yield {
+                "type": "workflow",
+                "step": "fallback",
+                "content": "⚠️ No models match specific filters, considering all available models..."
+            }
+            for provider, models in self.active_models.items():
+                for model_name, model_info in models.items():
+                    available_models[model_name] = {
+                        "info": model_info,
+                        "provider": provider
+                    }
+
+        # If still no models available, raise error
+        if not available_models:
+            yield {
+                "type": "workflow",
+                "step": "error",
+                "content": "❌ Error: No models available with current API keys"
+            }
+            raise ValueError("No models available with current API keys")
+
+        # Filter by required capabilities
+        if required_capabilities:
+            yield {
+                "type": "workflow",
+                "step": "capabilities",
+                "content": f"🔍 Checking models for required capabilities: {', '.join(required_capabilities)}"
+            }
+            capable_models = {}
+            for model_name, model_info in available_models.items():
+                if all(cap in model_info["info"]["capabilities"] for cap in required_capabilities):
+                    capable_models[model_name] = model_info
+            available_models = capable_models or available_models
+
+        yield {
+            "type": "workflow",
+            "step": "selecting",
+            "content": "🎯 Selecting optimal model from available options..."
+        }
+
+        # Select the most capable model (prefer GPT-4 or Claude-2)
+        preferred_models = ["gpt-4", "claude-2", "gpt-3.5-turbo", "claude-instant-1"]
+        for model in preferred_models:
+            if model in available_models:
+                yield {
+                    "type": "workflow",
+                    "step": "selected",
+                    "content": f"✅ Selected model: {model} from {available_models[model]['provider']}"
+                }
+                yield {
+                    "type": "model_selected",
+                    "model": {
+                        "name": model,
+                        "provider": available_models[model]["provider"],
+                        "temperature": temperature
+                    }
+                }
+                return
+
+        # If no preferred models available, use first available
+        model_name = next(iter(available_models))
+        yield {
+            "type": "workflow",
+            "step": "fallback_selected",
+            "content": f"⚠️ Selected fallback model: {model_name} from {available_models[model_name]['provider']}"
+        }
+        yield {
+            "type": "model_selected",
+            "model": {
+                "name": model_name,
+                "provider": available_models[model_name]["provider"],
+                "temperature": temperature
+            }
         }
 
     async def call_with_tools(
         self,
-        model: Dict[str, Any],
-        messages: List[Dict[str, str]],
+        model: Union[str, Dict[str, Any]],
+        provider: Optional[str] = None,
+        messages: List[Dict[str, str]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: Optional[float] = None,
         stream: bool = True,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Call the AI model with the given messages and tools."""
+        """Call the AI model with tools."""
         try:
-            if model["provider"] == "openai":
+            # Handle model parameter
+            if isinstance(model, dict):
+                model_name = model.get("name")
+                provider = model.get("provider")
+                if not model_name or not provider:
+                    raise ValueError("Model dictionary must contain 'name' and 'provider' keys")
+            else:
+                model_name = model
+                if not provider:
+                    # Try to determine provider from model name
+                    if model_name.startswith("gpt-"):
+                        provider = "openai"
+                    elif model_name.startswith("claude-"):
+                        provider = "anthropic"
+                    else:
+                        raise ValueError(f"Could not determine provider for model: {model_name}")
+
+            # Map model name if needed
+            if model_name in self.model_mapping:
+                model_name = self.model_mapping[model_name]
+
+            yield {
+                "type": "workflow",
+                "step": "api_call",
+                "content": f"🔄 Calling {provider} API with model {model_name}..."
+            }
+
+            if provider == "openai":
+                if not self.openai_client:
+                    raise ValueError("OpenAI API key not set")
                 async for chunk in self._call_openai(
-                    model=model["name"],
+                    model=model_name,
                     messages=messages,
                     tools=tools,
                     temperature=temperature,
                     stream=stream
                 ):
                     yield chunk
-            elif model["provider"] == "anthropic":
+            elif provider == "anthropic":
+                if not self.anthropic_client:
+                    raise ValueError("Anthropic API key not set")
                 async for chunk in self._call_anthropic(
-                    model=model["name"],
+                    model=model_name,
                     messages=messages,
                     tools=tools,
                     temperature=temperature,
@@ -302,15 +318,15 @@ class ModelManager:
                 ):
                     yield chunk
             else:
-                yield {
-                    "type": "error",
-                    "content": f"Unsupported model provider: {model['provider']}"
-                }
+                raise ValueError(f"Unsupported provider: {provider}")
+
         except Exception as e:
             yield {
                 "type": "error",
-                "content": f"{model['provider']} API error: {str(e)}"
+                "content": f"❌ API call error: {str(e)}"
             }
+            logger.error(f"Error in call_with_tools: {str(e)}")
+            raise
 
     async def _call_openai(
         self,
@@ -321,111 +337,125 @@ class ModelManager:
         stream: bool = True,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Call OpenAI API with the given parameters."""
+        if not self.openai_client:
+            raise ValueError("OpenAI API key not set")
+            
+        # Map model name to actual model identifier
+        actual_model = self.model_mapping.get(model, model)
+            
+        # Prepare parameters
+        params = {
+            "model": actual_model,
+            "messages": messages,
+            "temperature": temperature if temperature is not None else 0.7,
+            "stream": stream
+        }
+        
+        # Add tools if provided
+        if tools:
+            params["tools"] = tools
+
         try:
-            if not self.openai_client:
-                yield {
-                    "type": "error",
-                    "content": "OpenAI API key not provided"
-                }
-                return
-                
-            # Map model names to actual OpenAI model names
-            model_mapping = {
-                "o3-mini": "gpt-4-0125-preview",  # Latest GPT-4 Turbo
-                "o1": "gpt-4",
-                "o1-mini": "gpt-4",
-                "o1-pro": "gpt-4",
-                "gpt-4o": "gpt-4",
-                "gpt-4o-mini": "gpt-4",
-                "gpt-4-turbo": "gpt-4-0125-preview",
-                "gpt-4": "gpt-4",
-                "gpt-4.5-preview": "gpt-4-0125-preview"
-            }
-            
-            actual_model = model_mapping.get(model, model)
-                
-            # Prepare parameters
-            params = {
-                "model": actual_model,
-                "messages": messages,
-                "stream": stream
-            }
-            
-            # Only add temperature if explicitly provided
-            if temperature is not None:
-                params["temperature"] = temperature
-                
-            # Add tools if provided
-            if tools:
-                params["tools"] = tools
+            # Make API call
+            response = await self.openai_client.chat.completions.create(**params)
 
-            try:
-                # Make API call
-                response = await self.openai_client.chat.completions.create(**params)
-
-                if stream:
-                    content_buffer = ""
-                    async for chunk in response:
-                        # Get content from the chunk
-                        content = chunk.choices[0].delta.content
-                        
-                        # If we have content, add it to buffer
-                        if content:
-                            content_buffer += content
-                            yield {
-                                "type": "response",
-                                "content": content
-                            }
+            if stream:
+                content_buffer = ""
+                word_buffer = ""
+                async for chunk in response:
+                    # Get content from the chunk
+                    delta = chunk.choices[0].delta
+                    content = delta.content if hasattr(delta, 'content') and delta.content else None
                     
-                    # If we got no content at all, yield a default response
-                    if not content_buffer:
-                        yield {
-                            "type": "response",
-                            "content": "Hello! I'm here to help. What can I assist you with today?"
-                        }
-                else:
-                    content = response.choices[0].message.content
+                    # If we have content, add it to buffer
                     if content:
-                        yield {
-                            "type": "response",
-                            "content": content
-                        }
-                    else:
-                        yield {
-                            "type": "response",
-                            "content": "Hello! I'm here to help. What can I assist you with today?"
-                        }
-            except openai.BadRequestError as e:
-                # Handle specific OpenAI errors
-                error_message = str(e)
-                if "model does not exist" in error_message.lower():
-                    yield {
-                        "type": "error",
-                        "content": f"Model '{model}' is not available. Using default model instead.",
-                    }
-                    # Retry with default model
-                    params["model"] = "gpt-4"
-                    response = await self.openai_client.chat.completions.create(**params)
-                    if stream:
-                        async for chunk in response:
-                            if chunk.choices[0].delta.content:
+                        content_buffer += content
+                        word_buffer += content
+                        
+                        # Check for word boundaries (space, punctuation)
+                        if any(char in word_buffer for char in " .,!?;:"):
+                            # Split and yield complete words
+                            words = word_buffer.split()
+                            for word in words[:-1]:  # All but last word
                                 yield {
                                     "type": "response",
-                                    "content": chunk.choices[0].delta.content
+                                    "content": word + " "
                                 }
-                    else:
+                            if words:  # Handle last word
+                                if word_buffer.strip().endswith(tuple(".,!?;:")):
+                                    yield {
+                                        "type": "response",
+                                        "content": words[-1] + word_buffer[word_buffer.rstrip().rfind(words[-1]) + len(words[-1]):] + " "
+                                    }
+                                else:
+                                    yield {
+                                        "type": "response",
+                                        "content": words[-1] + " "
+                                    }
+                            word_buffer = ""
+                    
+                    # Handle tool calls
+                    tool_calls = delta.tool_calls if hasattr(delta, 'tool_calls') and delta.tool_calls else None
+                    if tool_calls:
+                        for tool_call in tool_calls:
+                            yield {
+                                "type": "tool_call",
+                                "tool_call": {
+                                    "id": tool_call.id,
+                                    "type": tool_call.type,
+                                    "function": {
+                                        "name": tool_call.function.name,
+                                        "arguments": tool_call.function.arguments
+                                    }
+                                }
+                            }
+                
+                # Handle any remaining content in word buffer
+                if word_buffer.strip():
+                    yield {
+                        "type": "response",
+                        "content": word_buffer.strip() + " "
+                    }
+                
+                # If we got no content at all, yield a default response
+                if not content_buffer:
+                    yield {
+                        "type": "response",
+                        "content": "Hello! I'm here to help. What can I assist you with today?"
+                    }
+            else:
+                choice = response.choices[0]
+                if hasattr(choice, 'message'):
+                    message = choice.message
+                    if hasattr(message, 'content') and message.content:
                         yield {
                             "type": "response",
-                            "content": response.choices[0].message.content
+                            "content": message.content
                         }
+                    if hasattr(message, 'tool_calls') and message.tool_calls:
+                        for tool_call in message.tool_calls:
+                            yield {
+                                "type": "tool_call",
+                                "tool_call": {
+                                    "id": tool_call.id,
+                                    "type": tool_call.type,
+                                    "function": {
+                                        "name": tool_call.function.name,
+                                        "arguments": tool_call.function.arguments
+                                    }
+                                }
+                            }
                 else:
-                    raise  # Re-raise if it's a different BadRequestError
+                    yield {
+                        "type": "response",
+                        "content": "Hello! I'm here to help. What can I assist you with today?"
+                    }
                     
         except Exception as e:
-            print(f"OpenAI API error: {str(e)}")  # Log the error for debugging
+            logger.error(f"Error calling OpenAI API: {str(e)}")
             yield {
-                "type": "response",
-                "content": "Hello! I'm here to help. What can I assist you with today?"
+                "type": "error",
+                "content": f"Error calling OpenAI API: {str(e)}"
             }
 
     async def _call_anthropic(
@@ -516,4 +546,14 @@ class ModelManager:
                     },
                     "id": call.get("id", "")
                 })
-        return openai_tool_calls 
+        return openai_tool_calls
+
+    def set_openai_key(self, api_key: str):
+        """Set or update the OpenAI API key."""
+        self.api_keys["openai"] = api_key
+        self.openai_client = AsyncOpenAI(api_key=api_key)
+        
+    def set_anthropic_key(self, api_key: str):
+        """Set or update the Anthropic API key."""
+        self.api_keys["anthropic"] = api_key
+        self.anthropic_client = AsyncAnthropic(api_key=api_key) 

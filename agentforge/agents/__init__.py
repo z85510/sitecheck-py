@@ -1,8 +1,6 @@
 from typing import List
 from ..core.base_agent import BaseAgent
-from .safety_assistant import SafetyAssistant
-from .construction_meeting import ConstructionMeeting
-from .general_assistant import GeneralAssistant
+from .manager_assistant import ManagerAssistant
 
 def get_all_agents(
     openai_api_key: str = None,
@@ -11,17 +9,7 @@ def get_all_agents(
 ) -> List[BaseAgent]:
     """Get all available agents initialized with the provided API keys."""
     return [
-        SafetyAssistant(
-            openai_api_key=openai_api_key,
-            anthropic_api_key=anthropic_api_key,
-            base_path=base_path
-        ),
-        ConstructionMeeting(
-            openai_api_key=openai_api_key,
-            anthropic_api_key=anthropic_api_key,
-            base_path=base_path
-        ),
-        GeneralAssistant(
+        ManagerAssistant(
             openai_api_key=openai_api_key,
             anthropic_api_key=anthropic_api_key,
             base_path=base_path
@@ -29,8 +17,6 @@ def get_all_agents(
     ]
 
 __all__ = [
-    'SafetyAssistant',
-    'ConstructionMeeting',
-    'GeneralAssistant',
-    'get_all_agents'
+    'get_all_agents',
+    'ManagerAssistant'
 ] 

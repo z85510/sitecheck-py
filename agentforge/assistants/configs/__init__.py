@@ -1,3 +1,3 @@
 """
-Empty file to make the directory a Python package.
+Assistant configuration package.
 """ 
