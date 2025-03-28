@@ -237,12 +237,13 @@ def health_check():
 def list_agents():
     """List available agents and their capabilities"""
     try:
+        # Convert agents directly to a list of AgentInfo objects
         agents = [
-            {
-                "name": agent.name,
-                "description": agent.description,
-                "task_types": agent.task_types
-            }
+            AgentInfo(
+                name=agent.name,
+                description=agent.description,
+                task_types=list(set(agent.task_types))  # Remove duplicates from task_types
+            )
             for agent in orchestrator.agents
         ]
         
