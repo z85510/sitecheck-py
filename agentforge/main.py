@@ -99,30 +99,70 @@ class AgentInfo(BaseModel):
     ```json
     {
         "query": "Create a safety meeting agenda",
-        "agent": "construction_meeting",
+        "agent": "general_assistant",
         "temperature": 0.7,
         "model_type": "reasoning",
         "model_category": "flagship"
     }
     ```
+    
+    Available agents:
+    - general_assistant: General purpose AI assistant
+    - construction_meeting: Construction meeting specialist
+    - construction_coordinator: Construction project coordinator
     """
 )
 async def process_query(request: QueryRequest):
     try:
-        return await orchestrator.process_query(
+        # Get available agents
+        available_agents = {agent.name.lower(): agent.name for agent in orchestrator.agents}
+        
+        # Check if requested agent exists (case-insensitive)
+        agent_name = request.agent.lower()
+        if agent_name not in available_agents:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": f"Agent '{request.agent}' not found",
+                    "available_agents": list(available_agents.values()),
+                    "suggestion": "Agent names are case-sensitive. Available agents are listed above."
+                }
+            )
+        
+        # Use the correct case for the agent name
+        actual_agent_name = available_agents[agent_name]
+        
+        # Process the query
+        response = await orchestrator.process_query(
             query=request.query,
-            agent_name=request.agent,
+            agent_name=actual_agent_name,
             temperature=request.temperature,
             preferred_model=request.preferred_model,
             model_type=request.model_type,
             model_category=request.model_category
         )
+        
+        if not response or (isinstance(response, dict) and not any(response.values())):
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "Agent returned an empty response",
+                    "agent": actual_agent_name,
+                    "query": request.query
+                }
+            )
+            
+        return response
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
-            status_code=400,
+            status_code=500,
             detail={
                 "error": str(e),
-                "available_agents": [agent.name for agent in orchestrator.agents]
+                "available_agents": [agent.name for agent in orchestrator.agents],
+                "note": "Agent names are case-sensitive. Please use exact names from the list above."
             }
         )
 
@@ -139,20 +179,43 @@ async def process_query(request: QueryRequest):
     ```json
     {
         "query": "Create a safety meeting agenda",
-        "agent": "construction_meeting",
+        "agent": "general_assistant",
         "temperature": 0.7,
         "model_type": "reasoning",
         "model_category": "flagship"
     }
     ```
+    
+    Available agents:
+    - general_assistant: General purpose AI assistant
+    - construction_meeting: Construction meeting specialist
+    - construction_coordinator: Construction project coordinator
     """
 )
 async def stream_process(request: QueryRequest):
     try:
+        # Get available agents
+        available_agents = {agent.name.lower(): agent.name for agent in orchestrator.agents}
+        
+        # Check if requested agent exists (case-insensitive)
+        agent_name = request.agent.lower()
+        if agent_name not in available_agents:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": f"Agent '{request.agent}' not found",
+                    "available_agents": list(available_agents.values()),
+                    "suggestion": "Agent names are case-sensitive. Available agents are listed above."
+                }
+            )
+        
+        # Use the correct case for the agent name
+        actual_agent_name = available_agents[agent_name]
+        
         return StreamingResponse(
             orchestrator.stream_process(
                 query=request.query,
-                agent_name=request.agent,
+                agent_name=actual_agent_name,
                 temperature=request.temperature,
                 preferred_model=request.preferred_model,
                 model_type=request.model_type,
@@ -160,12 +223,15 @@ async def stream_process(request: QueryRequest):
             ),
             media_type="text/event-stream"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
-            status_code=400,
+            status_code=500,
             detail={
                 "error": str(e),
-                "available_agents": [agent.name for agent in orchestrator.agents]
+                "available_agents": [agent.name for agent in orchestrator.agents],
+                "note": "Agent names are case-sensitive. Please use exact names from the list above."
             }
         )
 
