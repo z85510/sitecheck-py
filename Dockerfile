@@ -51,6 +51,23 @@ RUN mkdir -p /app/vectordb && \
 # Copy application code
 COPY --chown=appuser:appuser . .
 
+# Create entrypoint script
+COPY --chown=appuser:appuser <<EOF /app/entrypoint.sh
+#!/bin/bash
+set -e
+
+# Check for required environment variables
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo "Error: OPENAI_API_KEY environment variable is required"
+    exit 1
+fi
+
+# Start the application
+exec uvicorn agentforge.main:app --host 0.0.0.0 --port 8001
+EOF
+
+RUN chmod +x /app/entrypoint.sh
+
 # Switch to non-root user
 USER appuser
 
@@ -61,5 +78,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD curl -f http://localhost:8001/health || exit 1
 
-# Command to run the application
-CMD ["uvicorn", "agentforge.main:app", "--host", "0.0.0.0", "--port", "8001"] 
+# Use entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"] 
