@@ -72,6 +72,7 @@ class BaseAgent(ABC):
         self,
         query: str,
         temperature: Optional[float] = None,
+        preferred_model: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Process a query and stream the response."""
@@ -80,6 +81,7 @@ class BaseAgent(ABC):
             model = self.model_manager.select_model(
                 task_type="general",
                 required_capabilities=["conversation"],
+                preferred_model=preferred_model,
                 temperature=temperature
             )
             
@@ -105,7 +107,8 @@ class BaseAgent(ABC):
                 yield {
                     "type": chunk["type"],
                     "content": chunk["content"],
-                    "agent": self.name
+                    "agent": self.name,
+                    "model": model["name"]  # Include model info in response
                 }
                 
         except Exception as e:

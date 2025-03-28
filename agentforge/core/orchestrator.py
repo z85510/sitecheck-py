@@ -25,6 +25,7 @@ class AgentOrchestrator:
         query: str,
         force_agent: Optional[str] = None,
         temperature: Optional[float] = 0.7,
+        preferred_model: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -75,6 +76,7 @@ class AgentOrchestrator:
                 async for chunk in selected_agent.stream_process(
                     query,
                     temperature=temperature,
+                    preferred_model=preferred_model,
                     **kwargs
                 ):
                     yield json.dumps(process_chunk(chunk))
@@ -93,6 +95,7 @@ class AgentOrchestrator:
                 async for chunk in self.manager.stream_process(
                     query,
                     temperature=temperature,
+                    preferred_model=preferred_model,
                     **kwargs
                 ):
                     yield json.dumps(process_chunk(chunk))
@@ -111,6 +114,7 @@ class AgentOrchestrator:
         query: str,
         force_agent: Optional[str] = None,
         temperature: Optional[float] = 0.7,
+        preferred_model: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Non-streaming version for compatibility"""
@@ -121,6 +125,7 @@ class AgentOrchestrator:
             query,
             force_agent=force_agent,
             temperature=temperature,
+            preferred_model=preferred_model,
             **kwargs
         ):
             if chunk["type"] == "response":

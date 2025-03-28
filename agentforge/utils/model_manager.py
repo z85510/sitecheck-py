@@ -19,28 +19,66 @@ class ModelManager:
         
         # Define available models and their capabilities
         self.models = {
+            "claude-3-opus-20240229": {  # o3
+                "provider": "anthropic",
+                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
+                "max_tokens": 4096,
+                "temperature_range": (0.0, 1.0),
+                "alias": "o3",
+                "priority": 1  # Highest priority
+            },
+            "claude-3-sonnet-20240229": {  # o1
+                "provider": "anthropic",
+                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
+                "max_tokens": 4096,
+                "temperature_range": (0.0, 1.0),
+                "alias": "o1",
+                "priority": 2  # Second priority
+            },
             "gpt-4-turbo-preview": {
                 "provider": "openai",
                 "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
                 "max_tokens": 4096,
-                "temperature_range": (0.0, 2.0)
-            },
-            "claude-3-opus-20240229": {
-                "provider": "anthropic",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
-                "max_tokens": 4096,
-                "temperature_range": (0.0, 1.0)
+                "temperature_range": (0.0, 2.0),
+                "priority": 3  # Lower priority
             }
+        }
+
+        # Create alias mapping
+        self.model_aliases = {
+            "o3": "claude-3-opus-20240229",
+            "o1": "claude-3-sonnet-20240229"
         }
         
     def select_model(
         self,
         task_type: str,
         required_capabilities: List[str],
+        preferred_model: Optional[str] = None,
         temperature: float = 0.7
     ) -> Dict[str, Any]:
-        """Select the most appropriate model based on task requirements"""
+        """Select the most appropriate model based on task requirements and preferences"""
         
+        # If preferred model is specified, try to resolve alias
+        if preferred_model:
+            if preferred_model in self.model_aliases:
+                preferred_model = self.model_aliases[preferred_model]
+            if preferred_model in self.models:
+                model_specs = self.models[preferred_model]
+                # Check if we have access to this model's provider
+                if (model_specs["provider"] == "openai" and self.openai_client) or \
+                   (model_specs["provider"] == "anthropic" and self.anthropic_client):
+                    # Check if model has required capabilities
+                    if all(cap in model_specs["capabilities"] for cap in required_capabilities):
+                        return {
+                            "name": preferred_model,
+                            "provider": model_specs["provider"],
+                            "max_tokens": model_specs["max_tokens"],
+                            "temperature": min(max(temperature, model_specs["temperature_range"][0]), 
+                                            model_specs["temperature_range"][1])
+                        }
+        
+        # If no preferred model or preferred model not available, find suitable models
         suitable_models = []
         
         for model_name, specs in self.models.items():
@@ -57,15 +95,18 @@ class ModelManager:
         if not suitable_models:
             raise ValueError("No suitable model found for the given requirements")
         
-        # For now, just return the first suitable model
-        # In the future, we could implement more sophisticated selection logic
+        # Sort by priority (lower number = higher priority)
+        suitable_models.sort(key=lambda x: x[1].get("priority", 999))
+        
+        # Return the highest priority suitable model
         selected_model, specs = suitable_models[0]
         
         return {
             "name": selected_model,
             "provider": specs["provider"],
             "max_tokens": specs["max_tokens"],
-            "temperature": min(max(temperature, specs["temperature_range"][0]), specs["temperature_range"][1])
+            "temperature": min(max(temperature, specs["temperature_range"][0]), 
+                            specs["temperature_range"][1])
         }
 
     async def call_with_tools(

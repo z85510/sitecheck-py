@@ -1,6 +1,6 @@
 import os
 from typing import Optional, Dict, Any, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from .core.orchestrator import AgentOrchestrator
 from .agents.construction_coordinator import ConstructionCoordinator
 from .agents.construction_meeting import ConstructionMeeting
 from .agents.general_assistant import GeneralAssistant
+from .agents import get_all_agents
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +52,7 @@ general = GeneralAssistant(
 
 # Initialize orchestrator with agents and API keys
 orchestrator = AgentOrchestrator(
-    agents=[coordinator, meeting, general],
+    agents=get_all_agents(),
     openai_api_key=openai_api_key,
     anthropic_api_key=anthropic_api_key
 )
@@ -60,6 +61,7 @@ class QueryRequest(BaseModel):
     query: str
     force_agent: Optional[str] = None
     temperature: Optional[float] = 0.7
+    preferred_model: Optional[str] = None
 
 class AgentInfo(BaseModel):
     name: str
@@ -68,39 +70,82 @@ class AgentInfo(BaseModel):
 
 @app.post("/query")
 async def process_query(request: QueryRequest):
+    """Process a query and return the response"""
+    return await orchestrator.process_query(
+        query=request.query,
+        force_agent=request.force_agent,
+        temperature=request.temperature,
+        preferred_model=request.preferred_model
+    )
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Stream responses through WebSocket"""
+    await websocket.accept()
+    
     try:
-        async def generate_response():
+        while True:
+            # Receive and parse request
+            data = await websocket.receive_text()
+            request = QueryRequest.parse_raw(data)
+            
+            # Stream response
             async for chunk in orchestrator.stream_process(
                 query=request.query,
                 force_agent=request.force_agent,
-                temperature=request.temperature
+                temperature=request.temperature,
+                preferred_model=request.preferred_model
             ):
-                yield chunk + "\n"
+                await websocket.send_text(chunk)
                 
-        return StreamingResponse(
-            generate_response(),
-            media_type="application/x-ndjson"
-        )
-            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        await websocket.send_text(
+            json.dumps({
+                "type": "error",
+                "content": f"WebSocket error: {str(e)}"
+            })
+        )
+    finally:
+        await websocket.close()
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint for container orchestration."""
-    return {"status": "healthy", "version": "1.0.0"}
+def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
 
 @app.get("/agents", response_model=List[AgentInfo])
-async def list_agents():
-    """List all available agents and their capabilities."""
-    if not orchestrator or not orchestrator.agents:
-        raise HTTPException(status_code=503, detail="No agents available")
-    
-    return [
-        {
-            "name": agent.name,
-            "description": agent.description,
-            "task_types": agent.config.task_types if hasattr(agent, 'config') else []
-        }
-        for agent in orchestrator.agents
-    ] 
+def list_agents():
+    """List available agents and their capabilities"""
+    return {
+        "agents": [
+            {
+                "name": agent.name,
+                "description": agent.description,
+                "task_types": agent.task_types
+            }
+            for agent in orchestrator.agents
+        ]
+    }
+
+@app.get("/models")
+def list_models():
+    """List available models and their capabilities"""
+    # Get model manager from first agent (they all share the same instance)
+    if not orchestrator.agents:
+        return {"models": []}
+        
+    model_manager = orchestrator.agents[0].model_manager
+    return {
+        "models": [
+            {
+                "name": name,
+                "alias": specs.get("alias", None),
+                "provider": specs["provider"],
+                "capabilities": specs["capabilities"],
+                "max_tokens": specs["max_tokens"],
+                "temperature_range": specs["temperature_range"]
+            }
+            for name, specs in model_manager.models.items()
+        ],
+        "aliases": model_manager.model_aliases
+    } 
