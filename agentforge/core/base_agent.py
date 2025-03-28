@@ -72,7 +72,7 @@ class BaseAgent(ABC):
         self,
         query: str,
         temperature: Optional[float] = None,
-        preferred_model: Optional[str] = None,
+        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Process a query and stream the response."""
@@ -108,7 +108,8 @@ class BaseAgent(ABC):
                     "type": chunk["type"],
                     "content": chunk["content"],
                     "agent": self.name,
-                    "model": model["name"]  # Include model info in response
+                    "model": model["name"],  # Include model info in response
+                    "temperature": model.get("temperature")  # Include temperature in response
                 }
                 
         except Exception as e:

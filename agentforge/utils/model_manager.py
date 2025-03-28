@@ -19,33 +19,36 @@ class ModelManager:
         
         # Define available models and their capabilities
         self.models = {
-            "claude-3-opus-20240229": {  # o3
+            "gpt-4-turbo-preview": {  # Default model
+                "provider": "openai",
+                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
+                "max_tokens": 8192,
+                "temperature_range": (0.0, 2.0),
+                "alias": "gpt-4o",
+                "priority": 1,  # Highest priority
+                "default_temperature": 0.1
+            },
+            "claude-3-opus-20240229": {
                 "provider": "anthropic",
                 "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
                 "max_tokens": 4096,
                 "temperature_range": (0.0, 1.0),
                 "alias": "o3",
-                "priority": 1  # Highest priority
+                "priority": 2
             },
-            "claude-3-sonnet-20240229": {  # o1
+            "claude-3-sonnet-20240229": {
                 "provider": "anthropic",
                 "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling", "reasoning"],
                 "max_tokens": 4096,
                 "temperature_range": (0.0, 1.0),
                 "alias": "o1",
-                "priority": 2  # Second priority
-            },
-            "gpt-4-turbo-preview": {
-                "provider": "openai",
-                "capabilities": ["analysis", "conversation", "task_processing", "safety", "compliance", "tool_calling"],
-                "max_tokens": 4096,
-                "temperature_range": (0.0, 2.0),
-                "priority": 3  # Lower priority
+                "priority": 3
             }
         }
 
         # Create alias mapping
         self.model_aliases = {
+            "gpt-4o": "gpt-4-turbo-preview",
             "o3": "claude-3-opus-20240229",
             "o1": "claude-3-sonnet-20240229"
         }
@@ -55,7 +58,7 @@ class ModelManager:
         task_type: str,
         required_capabilities: List[str],
         preferred_model: Optional[str] = None,
-        temperature: float = 0.7
+        temperature: Optional[float] = None
     ) -> Dict[str, Any]:
         """Select the most appropriate model based on task requirements and preferences"""
         
@@ -74,8 +77,7 @@ class ModelManager:
                             "name": preferred_model,
                             "provider": model_specs["provider"],
                             "max_tokens": model_specs["max_tokens"],
-                            "temperature": min(max(temperature, model_specs["temperature_range"][0]), 
-                                            model_specs["temperature_range"][1])
+                            "temperature": temperature if temperature is not None else model_specs.get("default_temperature", 0.7)
                         }
         
         # If no preferred model or preferred model not available, find suitable models
@@ -105,8 +107,7 @@ class ModelManager:
             "name": selected_model,
             "provider": specs["provider"],
             "max_tokens": specs["max_tokens"],
-            "temperature": min(max(temperature, specs["temperature_range"][0]), 
-                            specs["temperature_range"][1])
+            "temperature": temperature if temperature is not None else specs.get("default_temperature", 0.7)
         }
 
     async def call_with_tools(

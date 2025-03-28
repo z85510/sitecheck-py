@@ -24,8 +24,8 @@ class AgentOrchestrator:
         self,
         query: str,
         force_agent: Optional[str] = None,
-        temperature: Optional[float] = 0.7,
-        preferred_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -113,8 +113,8 @@ class AgentOrchestrator:
         self,
         query: str,
         force_agent: Optional[str] = None,
-        temperature: Optional[float] = 0.7,
-        preferred_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
         **kwargs
     ) -> Dict[str, Any]:
         """Non-streaming version for compatibility"""
