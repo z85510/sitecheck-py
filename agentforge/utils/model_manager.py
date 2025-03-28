@@ -72,41 +72,71 @@ class ModelManager:
         self,
         model: Dict[str, Any],
         messages: List[Dict[str, str]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: Optional[float] = None,
         stream: bool = True,
-        **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Call the selected model with the given messages and tools"""
-        
+        """Call the AI model with the given messages and tools."""
         try:
             if model["provider"] == "openai":
-                async for chunk in self._call_openai(model, messages, stream, **kwargs):
+                async for chunk in self._call_openai(
+                    model=model["name"],
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    stream=stream
+                ):
                     yield chunk
-            else:  # anthropic
-                async for chunk in self._call_anthropic(model, messages, stream, **kwargs):
+            elif model["provider"] == "anthropic":
+                async for chunk in self._call_anthropic(
+                    model=model["name"],
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    stream=stream
+                ):
                     yield chunk
+            else:
+                yield {
+                    "type": "error",
+                    "content": f"Unsupported model provider: {model['provider']}"
+                }
         except Exception as e:
             yield {
                 "type": "error",
-                "content": f"Error calling {model['provider']}: {str(e)}"
+                "content": f"{model['provider']} API error: {str(e)}"
             }
 
     async def _call_openai(
         self,
-        model: Dict[str, Any],
+        model: str,
         messages: List[Dict[str, str]],
-        stream: bool,
-        **kwargs
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: Optional[float] = None,
+        stream: bool = True,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Call OpenAI model with the given parameters"""
+        """Call OpenAI API with the given parameters."""
         try:
-            response = await self.openai_client.chat.completions.create(
-                model=model["name"],
-                messages=messages,
-                temperature=model["temperature"],
-                stream=stream,
-                **kwargs
-            )
+            client = AsyncOpenAI(api_key=self.openai_api_key)
             
+            # Prepare parameters
+            params = {
+                "model": model,
+                "messages": messages,
+                "stream": stream
+            }
+            
+            # Only add temperature if explicitly provided
+            if temperature is not None:
+                params["temperature"] = temperature
+                
+            # Add tools if provided
+            if tools:
+                params["tools"] = tools
+
+            # Make API call
+            response = await client.chat.completions.create(**params)
+
             if stream:
                 async for chunk in response:
                     if chunk.choices[0].delta.content:
@@ -119,7 +149,6 @@ class ModelManager:
                     "type": "response",
                     "content": response.choices[0].message.content
                 }
-                
         except Exception as e:
             yield {
                 "type": "error",
@@ -128,31 +157,41 @@ class ModelManager:
 
     async def _call_anthropic(
         self,
-        model: Dict[str, Any],
+        model: str,
         messages: List[Dict[str, str]],
-        stream: bool,
-        **kwargs
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: Optional[float] = None,
+        stream: bool = True,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Call Anthropic model with the given parameters"""
+        """Call Anthropic API with the given parameters."""
         try:
-            # Convert chat format to Anthropic format
-            anthropic_messages = []
-            for msg in messages:
-                if msg["role"] == "system":
-                    system = msg["content"]
-                else:
-                    anthropic_messages.append(msg)
+            client = AsyncAnthropic(api_key=self.anthropic_api_key)
             
-            response = await self.anthropic_client.messages.create(
-                model=model["name"],
-                max_tokens=model["max_tokens"],
-                temperature=model["temperature"],
-                messages=anthropic_messages,
-                system=system if "system" in locals() else None,
-                stream=stream,
-                **kwargs
-            )
+            # Convert messages to Anthropic format
+            system_message = next((msg["content"] for msg in messages if msg["role"] == "system"), None)
+            user_messages = [msg["content"] for msg in messages if msg["role"] == "user"]
             
+            # Prepare parameters
+            params = {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": content}
+                    for content in user_messages
+                ],
+                "stream": stream
+            }
+            
+            # Add system message if present
+            if system_message:
+                params["system"] = system_message
+                
+            # Only add temperature if explicitly provided
+            if temperature is not None:
+                params["temperature"] = temperature
+
+            # Make API call
+            response = await client.messages.create(**params)
+
             if stream:
                 async for chunk in response:
                     if chunk.delta.text:
@@ -165,7 +204,6 @@ class ModelManager:
                     "type": "response",
                     "content": response.content[0].text
                 }
-                
         except Exception as e:
             yield {
                 "type": "error",

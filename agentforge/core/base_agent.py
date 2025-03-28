@@ -71,13 +71,49 @@ class BaseAgent(ABC):
     async def stream_process(
         self,
         query: str,
+        temperature: Optional[float] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Process a query and stream the response
-        Override this in specialized agents
-        """
-        raise NotImplementedError
+        """Process a query and stream the response."""
+        try:
+            # Select appropriate model
+            model = self.model_manager.select_model(
+                task_type="general",
+                required_capabilities=["conversation"],
+                temperature=temperature
+            )
+            
+            # Prepare messages
+            messages = [
+                {
+                    "role": "system",
+                    "content": self.get_context()
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ]
+            
+            # Stream response
+            async for chunk in self.model_manager.call_with_tools(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                stream=True
+            ):
+                yield {
+                    "type": chunk["type"],
+                    "content": chunk["content"],
+                    "agent": self.name
+                }
+                
+        except Exception as e:
+            yield {
+                "type": "error",
+                "content": f"Error in {self.name}: {str(e)}",
+                "agent": self.name
+            }
         
     async def get_relevant_documents(
         self,
