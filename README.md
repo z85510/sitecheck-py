@@ -170,9 +170,9 @@ Send a query to the AI assistant system.
 Streams JSON objects with the following structure:
 ```json
 {
-  "type": "string (thinking|response|error)",
-  "content": "string",
-  "agent": "string"
+  "type": "thinking|response|error",
+  "content": "message content",
+  "agent": "agent name"
 }
 ```
 

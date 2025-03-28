@@ -39,16 +39,35 @@ class AgentOrchestrator:
                     return {"type": "response", "content": chunk, "agent": "system"}
             return chunk
 
+        def get_available_agents():
+            """Helper function to get list of available agents"""
+            return [
+                {
+                    "name": agent.name,
+                    "description": agent.description,
+                    "task_types": agent.config.task_types if hasattr(agent, 'config') else []
+                }
+                for agent in self.agents
+            ]
+
         if not self.agents:
-            yield json.dumps({"type": "error", "content": "No agents available"})
+            yield json.dumps({
+                "type": "error",
+                "content": "No agents available",
+                "available_agents": []
+            })
             return
 
         try:
             if force_agent:
                 # Use the specified agent directly
-                matching_agents = [a for a in self.agents if a.name == force_agent]
+                matching_agents = [a for a in self.agents if a.name.lower() == force_agent.lower()]
                 if not matching_agents:
-                    yield json.dumps({"type": "error", "content": f"Specified agent '{force_agent}' not found"})
+                    yield json.dumps({
+                        "type": "error",
+                        "content": f"Specified agent '{force_agent}' not found",
+                        "available_agents": get_available_agents()
+                    })
                     return
                 selected_agent = matching_agents[0]
                 
@@ -63,7 +82,11 @@ class AgentOrchestrator:
             else:
                 # Use manager to handle the query
                 if not self.manager:
-                    yield json.dumps({"type": "error", "content": "Manager Assistant not available"})
+                    yield json.dumps({
+                        "type": "error",
+                        "content": "Manager Assistant not available",
+                        "available_agents": get_available_agents()
+                    })
                     return
                 
                 # Stream manager's response
@@ -79,7 +102,8 @@ class AgentOrchestrator:
             error_details = traceback.format_exc()
             yield json.dumps({
                 "type": "error",
-                "content": f"Error in orchestrator: {str(e)}\nDetails: {error_details}"
+                "content": f"Error in orchestrator: {str(e)}\nDetails: {error_details}",
+                "available_agents": get_available_agents()
             })
             
     async def process_query(

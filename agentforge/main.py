@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,6 +61,11 @@ class QueryRequest(BaseModel):
     force_agent: Optional[str] = None
     temperature: Optional[float] = 0.7
 
+class AgentInfo(BaseModel):
+    name: str
+    description: str
+    task_types: List[str]
+
 @app.post("/query")
 async def process_query(request: QueryRequest):
     try:
@@ -85,19 +90,17 @@ async def health_check():
     """Health check endpoint for container orchestration."""
     return {"status": "healthy", "version": "1.0.0"}
 
-@app.get("/agents")
+@app.get("/agents", response_model=List[AgentInfo])
 async def list_agents():
-    """
-    List all available agents and their descriptions.
-    """
-    return {
-        "agents": [
-            {
-                "name": agent.name,
-                "description": agent.description,
-                "task_types": agent.config.task_types if hasattr(agent, 'config') else None,
-                "keywords": agent.config.keywords if hasattr(agent, 'config') else None
-            }
-            for agent in orchestrator.agents
-        ]
-    } 
+    """List all available agents and their capabilities."""
+    if not orchestrator or not orchestrator.agents:
+        raise HTTPException(status_code=503, detail="No agents available")
+    
+    return [
+        {
+            "name": agent.name,
+            "description": agent.description,
+            "task_types": agent.config.task_types if hasattr(agent, 'config') else []
+        }
+        for agent in orchestrator.agents
+    ] 
