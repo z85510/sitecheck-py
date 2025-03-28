@@ -117,8 +117,13 @@ class ModelManager:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Call OpenAI API with the given parameters."""
         try:
-            client = AsyncOpenAI(api_key=self.openai_api_key)
-            
+            if not self.openai_client:
+                yield {
+                    "type": "error",
+                    "content": "OpenAI API key not provided"
+                }
+                return
+                
             # Prepare parameters
             params = {
                 "model": model,
@@ -135,7 +140,7 @@ class ModelManager:
                 params["tools"] = tools
 
             # Make API call
-            response = await client.chat.completions.create(**params)
+            response = await self.openai_client.chat.completions.create(**params)
 
             if stream:
                 async for chunk in response:
@@ -165,8 +170,13 @@ class ModelManager:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Call Anthropic API with the given parameters."""
         try:
-            client = AsyncAnthropic(api_key=self.anthropic_api_key)
-            
+            if not self.anthropic_client:
+                yield {
+                    "type": "error",
+                    "content": "Anthropic API key not provided"
+                }
+                return
+                
             # Convert messages to Anthropic format
             system_message = next((msg["content"] for msg in messages if msg["role"] == "system"), None)
             user_messages = [msg["content"] for msg in messages if msg["role"] == "user"]
@@ -190,7 +200,7 @@ class ModelManager:
                 params["temperature"] = temperature
 
             # Make API call
-            response = await client.messages.create(**params)
+            response = await self.anthropic_client.messages.create(**params)
 
             if stream:
                 async for chunk in response:
