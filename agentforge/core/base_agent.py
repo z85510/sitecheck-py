@@ -72,16 +72,38 @@ class BaseAgent(ABC):
         self,
         query: str,
         temperature: Optional[float] = None,
-        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
+        preferred_model: Optional[str] = "o3-mini",  # Default to o3-mini
+        model_type: Optional[str] = None,  # "reasoning" or "default"
+        model_category: Optional[str] = None,  # "reasoning", "flagship", "cost-optimized", "legacy", "claude"
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Process a query and stream the response."""
         try:
+            # Determine if we need reasoning capabilities based on the query
+            if model_type is None:
+                # Simple heuristic: if query contains complex reasoning keywords, use reasoning model
+                reasoning_keywords = [
+                    "why", "how", "explain", "analyze", "compare", "evaluate",
+                    "reason", "think", "consider", "determine", "assess",
+                    "investigate", "examine", "research", "study", "explore"
+                ]
+                model_type = "reasoning" if any(keyword in query.lower() for keyword in reasoning_keywords) else "default"
+
+            # If no category specified, use reasoning for complex queries
+            if model_category is None:
+                complex_keywords = [
+                    "complex", "detailed", "comprehensive", "thorough", "in-depth",
+                    "elaborate", "extensive", "sophisticated", "advanced", "nuanced"
+                ]
+                model_category = "reasoning" if any(keyword in query.lower() for keyword in complex_keywords) else "cost-optimized"
+
             # Select appropriate model
             model = self.model_manager.select_model(
                 task_type="general",
                 required_capabilities=["conversation"],
                 preferred_model=preferred_model,
+                model_type=model_type,
+                model_category=model_category,
                 temperature=temperature
             )
             
@@ -108,8 +130,10 @@ class BaseAgent(ABC):
                     "type": chunk["type"],
                     "content": chunk["content"],
                     "agent": self.name,
-                    "model": model["name"],  # Include model info in response
-                    "temperature": model.get("temperature")  # Include temperature in response
+                    "model": model["name"],
+                    "model_type": model["type"],
+                    "model_category": model["category"],
+                    "temperature": model.get("temperature")
                 }
                 
         except Exception as e:

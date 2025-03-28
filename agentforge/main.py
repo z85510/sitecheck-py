@@ -30,6 +30,7 @@ app.add_middleware(
 # Get API keys from environment
 openai_api_key = os.getenv("OPENAI_API_KEY")
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+base_path = os.getenv("VECTORDB_PATH", "agentforge")
 
 if not openai_api_key or not anthropic_api_key:
     raise ValueError("Missing required API keys")
@@ -52,16 +53,22 @@ general = GeneralAssistant(
 
 # Initialize orchestrator with agents and API keys
 orchestrator = AgentOrchestrator(
-    agents=get_all_agents(),
+    agents=get_all_agents(
+        openai_api_key=openai_api_key,
+        anthropic_api_key=anthropic_api_key,
+        base_path=base_path
+    ),
     openai_api_key=openai_api_key,
     anthropic_api_key=anthropic_api_key
 )
 
 class QueryRequest(BaseModel):
     query: str
-    force_agent: Optional[str] = None
-    temperature: Optional[float] = 0.7
+    agent: str
+    temperature: Optional[float] = None
     preferred_model: Optional[str] = None
+    model_type: Optional[str] = None
+    model_category: Optional[str] = None
 
 class AgentInfo(BaseModel):
     name: str
@@ -73,9 +80,24 @@ async def process_query(request: QueryRequest):
     """Process a query and return the response"""
     return await orchestrator.process_query(
         query=request.query,
-        force_agent=request.force_agent,
+        force_agent=request.agent,
         temperature=request.temperature,
         preferred_model=request.preferred_model
+    )
+
+@app.post("/stream_process")
+async def stream_process(request: QueryRequest):
+    """Stream process a query with a specific agent."""
+    return StreamingResponse(
+        orchestrator.stream_process(
+            query=request.query,
+            agent_name=request.agent,
+            temperature=request.temperature,
+            preferred_model=request.preferred_model,
+            model_type=request.model_type,
+            model_category=request.model_category
+        ),
+        media_type="text/event-stream"
     )
 
 @app.websocket("/ws")
@@ -92,7 +114,7 @@ async def websocket_endpoint(websocket: WebSocket):
             # Stream response
             async for chunk in orchestrator.stream_process(
                 query=request.query,
-                force_agent=request.force_agent,
+                force_agent=request.agent,
                 temperature=request.temperature,
                 preferred_model=request.preferred_model
             ):

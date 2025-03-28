@@ -23,91 +23,43 @@ class AgentOrchestrator:
     async def stream_process(
         self,
         query: str,
-        force_agent: Optional[str] = None,
+        agent_name: str,
         temperature: Optional[float] = None,
-        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
+        preferred_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        model_category: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Stream the processing of a query, showing the workflow and responses from multiple agents.
-        """
-        def process_chunk(chunk):
-            """Helper function to process chunks that may be dictionaries or JSON strings"""
-            if isinstance(chunk, str):
-                try:
-                    return json.loads(chunk)
-                except json.JSONDecodeError:
-                    return {"type": "response", "content": chunk, "agent": "system"}
-            return chunk
-
-        def get_available_agents():
-            """Helper function to get list of available agents"""
-            return [
-                {
-                    "name": agent.name,
-                    "description": agent.description,
-                    "task_types": agent.config.task_types if hasattr(agent, 'config') else []
-                }
-                for agent in self.agents
-            ]
-
-        if not self.agents:
-            yield json.dumps({
-                "type": "error",
-                "content": "No agents available",
-                "available_agents": []
-            })
-            return
-
+        """Process a query with a specific agent and stream the response."""
         try:
-            if force_agent:
-                # Use the specified agent directly
-                matching_agents = [a for a in self.agents if a.name.lower() == force_agent.lower()]
-                if not matching_agents:
-                    yield json.dumps({
-                        "type": "error",
-                        "content": f"Specified agent '{force_agent}' not found",
-                        "available_agents": get_available_agents()
-                    })
-                    return
-                selected_agent = matching_agents[0]
-                
-                # Stream the selected agent's response
-                async for chunk in selected_agent.stream_process(
-                    query,
-                    temperature=temperature,
-                    preferred_model=preferred_model,
-                    **kwargs
-                ):
-                    yield json.dumps(process_chunk(chunk))
-                    
-            else:
-                # Use manager to handle the query
-                if not self.manager:
-                    yield json.dumps({
-                        "type": "error",
-                        "content": "Manager Assistant not available",
-                        "available_agents": get_available_agents()
-                    })
-                    return
-                
-                # Stream manager's response
-                async for chunk in self.manager.stream_process(
-                    query,
-                    temperature=temperature,
-                    preferred_model=preferred_model,
-                    **kwargs
-                ):
-                    yield json.dumps(process_chunk(chunk))
-                
+            # Get the agent instance
+            agent = self.get_agent(agent_name)
+            if not agent:
+                available_agents = self.list_agents()
+                yield {
+                    "type": "error",
+                    "content": f"Agent '{agent_name}' not found. Available agents: {', '.join(available_agents)}",
+                    "agent": "orchestrator"
+                }
+                return
+
+            # Stream response from agent
+            async for chunk in agent.stream_process(
+                query=query,
+                temperature=temperature,
+                preferred_model=preferred_model,
+                model_type=model_type,
+                model_category=model_category,
+                **kwargs
+            ):
+                yield chunk
+
         except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            yield json.dumps({
+            yield {
                 "type": "error",
-                "content": f"Error in orchestrator: {str(e)}\nDetails: {error_details}",
-                "available_agents": get_available_agents()
-            })
+                "content": f"Error in orchestrator: {str(e)}",
+                "agent": "orchestrator"
+            }
             
     async def process_query(
         self,
