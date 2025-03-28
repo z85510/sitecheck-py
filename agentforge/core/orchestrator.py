@@ -64,9 +64,11 @@ class AgentOrchestrator:
     async def process_query(
         self,
         query: str,
-        force_agent: Optional[str] = None,
+        agent_name: str,
         temperature: Optional[float] = None,
-        preferred_model: Optional[str] = "gpt-4o",  # Default to gpt-4o
+        preferred_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        model_category: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Non-streaming version for compatibility"""
@@ -74,10 +76,12 @@ class AgentOrchestrator:
         workflow = None
         
         async for chunk in self.stream_process(
-            query,
-            force_agent=force_agent,
+            query=query,
+            agent_name=agent_name,
             temperature=temperature,
             preferred_model=preferred_model,
+            model_type=model_type,
+            model_category=model_category,
             **kwargs
         ):
             if chunk["type"] == "response":

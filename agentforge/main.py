@@ -80,9 +80,11 @@ async def process_query(request: QueryRequest):
     """Process a query and return the response"""
     return await orchestrator.process_query(
         query=request.query,
-        force_agent=request.agent,
+        agent_name=request.agent,
         temperature=request.temperature,
-        preferred_model=request.preferred_model
+        preferred_model=request.preferred_model,
+        model_type=request.model_type,
+        model_category=request.model_category
     )
 
 @app.post("/stream_process")
@@ -114,9 +116,11 @@ async def websocket_endpoint(websocket: WebSocket):
             # Stream response
             async for chunk in orchestrator.stream_process(
                 query=request.query,
-                force_agent=request.agent,
+                agent_name=request.agent,
                 temperature=request.temperature,
-                preferred_model=request.preferred_model
+                preferred_model=request.preferred_model,
+                model_type=request.model_type,
+                model_category=request.model_category
             ):
                 await websocket.send_text(chunk)
                 
