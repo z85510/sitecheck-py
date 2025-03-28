@@ -64,17 +64,47 @@ orchestrator = AgentOrchestrator(
 
 class QueryRequest(BaseModel):
     query: str
-    agent: str
-    temperature: Optional[float] = Field(None, description="Temperature for model response (0.0 to 1.0)", ge=0.0, le=1.0)
-    preferred_model: Optional[str] = Field(None, description="Preferred model to use (e.g., 'o3-mini', 'gpt-4o')")
-    model_type: Optional[str] = Field(None, description="Type of model to use ('reasoning' or 'default')")
-    model_category: Optional[str] = Field(None, description="Category of model ('reasoning', 'flagship', 'cost-optimized', 'legacy', 'claude')")
+    agent: str = Field(
+        description="""Agent name to handle the query. Available agents:
+        - general_assistant: General purpose AI assistant
+        - construction_meeting: Construction meeting specialist
+        - construction_coordinator: Construction project coordinator
+        """
+    )
+    temperature: Optional[float] = Field(
+        None, 
+        description="Temperature for model response (0.0 to 1.0)", 
+        ge=0.0, 
+        le=1.0
+    )
+    preferred_model: Optional[str] = Field(
+        "gpt-4o-mini",  # Default to gpt-4o-mini
+        description="""Model to use for the response. Examples:
+        - gpt-4o-mini: Default OpenAI model (cost-optimized)
+        - o3-mini: Claude 3 Opus (reasoning)
+        - gpt-4o: GPT-4 Turbo (flagship)
+        """
+    )
+    model_type: Optional[str] = Field(
+        "default",  # Default to "default" type
+        description="Type of model to use ('reasoning' or 'default')"
+    )
+    model_category: Optional[str] = Field(
+        "cost-optimized",  # Default to cost-optimized category
+        description="""Category of model to use:
+        - reasoning: Best for complex analysis
+        - flagship: Best quality but expensive
+        - cost-optimized: Good balance of quality and cost
+        - legacy: Older models
+        - claude: Anthropic models
+        """
+    )
 
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "Create a safety meeting agenda",
-                "agent": "construction_meeting",
+                "agent": "general_assistant",  # Updated to correct agent name
                 "temperature": 0.7,
                 "model_type": "reasoning",
                 "model_category": "flagship"
@@ -95,12 +125,21 @@ class AgentInfo(BaseModel):
     Available agents can be found using the /agents endpoint.
     Available models can be found using the /models endpoint.
     
-    Example request:
+    Example request (minimal):
+    ```json
+    {
+        "query": "Hello",
+        "agent": "general_assistant"
+    }
+    ```
+    
+    Example request (with model preferences):
     ```json
     {
         "query": "Create a safety meeting agenda",
         "agent": "general_assistant",
         "temperature": 0.7,
+        "preferred_model": "o3-mini",
         "model_type": "reasoning",
         "model_category": "flagship"
     }
@@ -125,7 +164,7 @@ async def process_query(request: QueryRequest):
                 detail={
                     "error": f"Agent '{request.agent}' not found",
                     "available_agents": list(available_agents.values()),
-                    "suggestion": "Agent names are case-sensitive. Available agents are listed above."
+                    "suggestion": "Use one of the available agent names listed above."
                 }
             )
         
@@ -137,9 +176,9 @@ async def process_query(request: QueryRequest):
             query=request.query,
             agent_name=actual_agent_name,
             temperature=request.temperature,
-            preferred_model=request.preferred_model,
-            model_type=request.model_type,
-            model_category=request.model_category
+            preferred_model=request.preferred_model or "gpt-4o-mini",  # Ensure default model
+            model_type=request.model_type or "default",  # Ensure default type
+            model_category=request.model_category or "cost-optimized"  # Ensure default category
         )
         
         if not response or (isinstance(response, dict) and not any(response.values())):
@@ -148,7 +187,8 @@ async def process_query(request: QueryRequest):
                 detail={
                     "error": "Agent returned an empty response",
                     "agent": actual_agent_name,
-                    "query": request.query
+                    "query": request.query,
+                    "model": request.preferred_model or "gpt-4o-mini"
                 }
             )
             
@@ -162,7 +202,7 @@ async def process_query(request: QueryRequest):
             detail={
                 "error": str(e),
                 "available_agents": [agent.name for agent in orchestrator.agents],
-                "note": "Agent names are case-sensitive. Please use exact names from the list above."
+                "note": "Use one of the available agent names listed above."
             }
         )
 
@@ -175,12 +215,21 @@ async def process_query(request: QueryRequest):
     Available agents can be found using the /agents endpoint.
     Available models can be found using the /models endpoint.
     
-    Example request:
+    Example request (minimal):
+    ```json
+    {
+        "query": "Hello",
+        "agent": "general_assistant"
+    }
+    ```
+    
+    Example request (with model preferences):
     ```json
     {
         "query": "Create a safety meeting agenda",
         "agent": "general_assistant",
         "temperature": 0.7,
+        "preferred_model": "o3-mini",
         "model_type": "reasoning",
         "model_category": "flagship"
     }
@@ -205,7 +254,7 @@ async def stream_process(request: QueryRequest):
                 detail={
                     "error": f"Agent '{request.agent}' not found",
                     "available_agents": list(available_agents.values()),
-                    "suggestion": "Agent names are case-sensitive. Available agents are listed above."
+                    "suggestion": "Use one of the available agent names listed above."
                 }
             )
         
@@ -217,9 +266,9 @@ async def stream_process(request: QueryRequest):
                 query=request.query,
                 agent_name=actual_agent_name,
                 temperature=request.temperature,
-                preferred_model=request.preferred_model,
-                model_type=request.model_type,
-                model_category=request.model_category
+                preferred_model=request.preferred_model or "gpt-4o-mini",  # Ensure default model
+                model_type=request.model_type or "default",  # Ensure default type
+                model_category=request.model_category or "cost-optimized"  # Ensure default category
             ),
             media_type="text/event-stream"
         )
@@ -231,7 +280,7 @@ async def stream_process(request: QueryRequest):
             detail={
                 "error": str(e),
                 "available_agents": [agent.name for agent in orchestrator.agents],
-                "note": "Agent names are case-sensitive. Please use exact names from the list above."
+                "note": "Use one of the available agent names listed above."
             }
         )
 
