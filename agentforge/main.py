@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import json
+import logging
+import traceback
 
 from .core.orchestrator import AgentOrchestrator
 from .agents.construction_coordinator import ConstructionCoordinator
@@ -62,17 +64,25 @@ orchestrator = AgentOrchestrator(
     anthropic_api_key=anthropic_api_key
 )
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 class QueryRequest(BaseModel):
     query: str
     agent: str = Field(
+        default="General Assistant",  # Default to "General Assistant" to match actual agent name
         description="""Agent name to handle the query. Available agents:
-        - general_assistant: General purpose AI assistant
-        - construction_meeting: Construction meeting specialist
-        - construction_coordinator: Construction project coordinator
+        - General Assistant: General purpose AI assistant
+        - Construction Meeting Assistant: Construction meeting specialist
+        - Safety Assistant: Safety and compliance specialist
         """
     )
     temperature: Optional[float] = Field(
-        None, 
+        0.7,  # Default temperature
         description="Temperature for model response (0.0 to 1.0)", 
         ge=0.0, 
         le=1.0
@@ -103,11 +113,8 @@ class QueryRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "query": "Create a safety meeting agenda",
-                "agent": "general_assistant",  # Updated to correct agent name
-                "temperature": 0.7,
-                "model_type": "reasoning",
-                "model_category": "flagship"
+                "query": "Hello",  # Simple example
+                "agent": "General Assistant"  # Match exact agent name
             }
         }
 
@@ -122,87 +129,141 @@ class AgentInfo(BaseModel):
     description="""
     Send a query to a specific agent and get a complete response.
     
-    Available agents can be found using the /agents endpoint.
-    Available models can be found using the /models endpoint.
-    
-    Example request (minimal):
+    Minimal example:
     ```json
     {
-        "query": "Hello",
-        "agent": "general_assistant"
+        "query": "Hello"
     }
     ```
     
-    Example request (with model preferences):
+    Full example:
     ```json
     {
         "query": "Create a safety meeting agenda",
-        "agent": "general_assistant",
+        "agent": "General Assistant",
         "temperature": 0.7,
-        "preferred_model": "o3-mini",
+        "preferred_model": "gpt-4o-mini",
         "model_type": "reasoning",
         "model_category": "flagship"
     }
     ```
-    
-    Available agents:
-    - general_assistant: General purpose AI assistant
-    - construction_meeting: Construction meeting specialist
-    - construction_coordinator: Construction project coordinator
     """
 )
 async def process_query(request: QueryRequest):
     try:
-        # Get available agents
-        available_agents = {agent.name.lower(): agent.name for agent in orchestrator.agents}
+        logger.info(f"Received query request: {request.dict()}")
         
-        # Check if requested agent exists (case-insensitive)
-        agent_name = request.agent.lower()
-        if agent_name not in available_agents:
+        # Get available agents with both exact names and normalized names
+        available_agents = {}
+        normalized_to_actual = {}
+        for agent in orchestrator.agents:
+            # Store both the exact name and normalized versions
+            available_agents[agent.name] = agent.name  # Exact match
+            available_agents[agent.name.lower()] = agent.name  # Lowercase
+            available_agents[agent.name.lower().replace(" ", "_")] = agent.name  # Snake case
+            available_agents[agent.name.lower().replace(" ", "")] = agent.name  # No spaces
+            normalized_to_actual[agent.name.lower()] = agent.name
+            
+        logger.debug(f"Available agents mapping: {available_agents}")
+        
+        # Try different variations of the agent name
+        agent_variations = [
+            request.agent,  # Original
+            request.agent.lower(),  # Lowercase
+            request.agent.lower().replace(" ", "_"),  # Snake case
+            request.agent.lower().replace(" ", ""),  # No spaces
+            request.agent.title()  # Title case
+        ]
+        
+        # Find the first matching variation
+        actual_agent_name = None
+        for variation in agent_variations:
+            if variation in available_agents:
+                actual_agent_name = available_agents[variation]
+                break
+                
+        if not actual_agent_name:
+            logger.warning(f"Agent not found: {request.agent}")
             raise HTTPException(
                 status_code=404,
                 detail={
                     "error": f"Agent '{request.agent}' not found",
-                    "available_agents": list(available_agents.values()),
+                    "available_agents": list(normalized_to_actual.values()),
                     "suggestion": "Use one of the available agent names listed above."
                 }
             )
         
-        # Use the correct case for the agent name
-        actual_agent_name = available_agents[agent_name]
+        logger.info(f"Using agent: {actual_agent_name}")
+        
+        # Log model selection
+        logger.info(f"Model settings: type={request.model_type}, category={request.model_category}, model={request.preferred_model}")
         
         # Process the query
-        response = await orchestrator.process_query(
-            query=request.query,
-            agent_name=actual_agent_name,
-            temperature=request.temperature,
-            preferred_model=request.preferred_model or "gpt-4o-mini",  # Ensure default model
-            model_type=request.model_type or "default",  # Ensure default type
-            model_category=request.model_category or "cost-optimized"  # Ensure default category
-        )
-        
-        if not response or (isinstance(response, dict) and not any(response.values())):
+        try:
+            response = await orchestrator.process_query(
+                query=request.query,
+                agent_name=actual_agent_name,  # Use the correct case-sensitive name
+                temperature=request.temperature,
+                preferred_model=request.preferred_model,
+                model_type=request.model_type,
+                model_category=request.model_category
+            )
+            
+            logger.debug(f"Raw response: {response}")
+            
+            if not response:
+                logger.error(f"Empty response from agent {actual_agent_name}")
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": "Agent returned an empty response",
+                        "agent": actual_agent_name,
+                        "query": request.query,
+                        "model": request.preferred_model
+                    }
+                )
+                
+            if isinstance(response, dict) and not any(response.values()):
+                logger.error(f"Empty dictionary response from agent {actual_agent_name}")
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "error": "Agent returned an empty dictionary",
+                        "agent": actual_agent_name,
+                        "query": request.query,
+                        "model": request.preferred_model,
+                        "response": response
+                    }
+                )
+                
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error processing query: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise HTTPException(
                 status_code=500,
                 detail={
-                    "error": "Agent returned an empty response",
+                    "error": f"Error processing query: {str(e)}",
                     "agent": actual_agent_name,
                     "query": request.query,
-                    "model": request.preferred_model or "gpt-4o-mini"
+                    "model": request.preferred_model,
+                    "traceback": traceback.format_exc()
                 }
             )
-            
-        return response
         
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail={
                 "error": str(e),
                 "available_agents": [agent.name for agent in orchestrator.agents],
-                "note": "Use one of the available agent names listed above."
+                "note": "Use one of the available agent names listed above.",
+                "traceback": traceback.format_exc()
             }
         )
 
@@ -212,14 +273,11 @@ async def process_query(request: QueryRequest):
     description="""
     Send a query to a specific agent and get a streaming response.
     
-    Available agents can be found using the /agents endpoint.
-    Available models can be found using the /models endpoint.
-    
     Example request (minimal):
     ```json
     {
         "query": "Hello",
-        "agent": "general_assistant"
+        "agent": "General Assistant"
     }
     ```
     
@@ -227,7 +285,7 @@ async def process_query(request: QueryRequest):
     ```json
     {
         "query": "Create a safety meeting agenda",
-        "agent": "general_assistant",
+        "agent": "General Assistant",
         "temperature": 0.7,
         "preferred_model": "o3-mini",
         "model_type": "reasoning",
@@ -236,51 +294,104 @@ async def process_query(request: QueryRequest):
     ```
     
     Available agents:
-    - general_assistant: General purpose AI assistant
-    - construction_meeting: Construction meeting specialist
-    - construction_coordinator: Construction project coordinator
+    - General Assistant: General purpose AI assistant
+    - Construction Meeting Assistant: Construction meeting specialist
+    - Safety Assistant: Safety and compliance specialist
     """
 )
 async def stream_process(request: QueryRequest):
     try:
-        # Get available agents
-        available_agents = {agent.name.lower(): agent.name for agent in orchestrator.agents}
+        logger.info(f"Received stream request: {request.dict()}")
         
-        # Check if requested agent exists (case-insensitive)
-        agent_name = request.agent.lower()
-        if agent_name not in available_agents:
+        # Get available agents with both exact names and normalized names
+        available_agents = {}
+        normalized_to_actual = {}
+        for agent in orchestrator.agents:
+            # Store both the exact name and normalized versions
+            available_agents[agent.name] = agent.name  # Exact match
+            available_agents[agent.name.lower()] = agent.name  # Lowercase
+            available_agents[agent.name.lower().replace(" ", "_")] = agent.name  # Snake case
+            available_agents[agent.name.lower().replace(" ", "")] = agent.name  # No spaces
+            normalized_to_actual[agent.name.lower()] = agent.name
+            
+        logger.debug(f"Available agents mapping: {available_agents}")
+        
+        # Try different variations of the agent name
+        agent_variations = [
+            request.agent,  # Original
+            request.agent.lower(),  # Lowercase
+            request.agent.lower().replace(" ", "_"),  # Snake case
+            request.agent.lower().replace(" ", ""),  # No spaces
+            request.agent.title()  # Title case
+        ]
+        
+        # Find the first matching variation
+        actual_agent_name = None
+        for variation in agent_variations:
+            if variation in available_agents:
+                actual_agent_name = available_agents[variation]
+                break
+                
+        if not actual_agent_name:
+            logger.warning(f"Agent not found: {request.agent}")
             raise HTTPException(
                 status_code=404,
                 detail={
                     "error": f"Agent '{request.agent}' not found",
-                    "available_agents": list(available_agents.values()),
+                    "available_agents": list(normalized_to_actual.values()),
                     "suggestion": "Use one of the available agent names listed above."
                 }
             )
+            
+        logger.info(f"Using agent: {actual_agent_name}")
         
-        # Use the correct case for the agent name
-        actual_agent_name = available_agents[agent_name]
+        # Log model selection
+        logger.info(f"Model settings: type={request.model_type}, category={request.model_category}, model={request.preferred_model}")
+        
+        async def generate_sse():
+            try:
+                async for chunk in orchestrator.stream_process(
+                    query=request.query,
+                    agent_name=actual_agent_name,  # Use the correct case-sensitive name
+                    temperature=request.temperature,
+                    preferred_model=request.preferred_model,
+                    model_type=request.model_type,
+                    model_category=request.model_category
+                ):
+                    # Format as SSE
+                    yield f"data: {json.dumps(chunk)}\n\n"
+            except Exception as e:
+                error_data = {
+                    "type": "error",
+                    "content": str(e),
+                    "agent": actual_agent_name
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+            finally:
+                # Send end of stream marker
+                yield "data: [DONE]\n\n"
         
         return StreamingResponse(
-            orchestrator.stream_process(
-                query=request.query,
-                agent_name=actual_agent_name,
-                temperature=request.temperature,
-                preferred_model=request.preferred_model or "gpt-4o-mini",  # Ensure default model
-                model_type=request.model_type or "default",  # Ensure default type
-                model_category=request.model_category or "cost-optimized"  # Ensure default category
-            ),
-            media_type="text/event-stream"
+            generate_sse(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
         )
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail={
                 "error": str(e),
-                "available_agents": [agent.name for agent in orchestrator.agents],
-                "note": "Use one of the available agent names listed above."
+                "available_agents": list(normalized_to_actual.values()),
+                "note": "Use one of the available agent names listed above.",
+                "traceback": traceback.format_exc()
             }
         )
 

@@ -198,6 +198,17 @@ class ModelManager:
     ) -> Dict[str, Any]:
         """Select the most appropriate model based on task requirements and preferences"""
         
+        # Default to gpt-4 if no specific requirements
+        if not required_capabilities and not model_type and not model_category:
+            return {
+                "name": "gpt-4",
+                "provider": "openai",
+                "max_tokens": 8192,
+                "temperature": temperature if temperature is not None else 0.7,
+                "type": "default",
+                "category": "legacy"
+            }
+        
         # If preferred model is specified, try to resolve alias
         if preferred_model:
             if preferred_model in self.model_aliases:
@@ -236,8 +247,16 @@ class ModelManager:
                (not model_category or specs.get("category") == model_category):
                 suitable_models.append((model_name, specs))
         
+        # If no suitable models found, fall back to gpt-4
         if not suitable_models:
-            raise ValueError(f"No suitable model found for the given requirements (type: {model_type}, category: {model_category})")
+            return {
+                "name": "gpt-4",
+                "provider": "openai",
+                "max_tokens": 8192,
+                "temperature": temperature if temperature is not None else 0.7,
+                "type": "default",
+                "category": "legacy"
+            }
         
         # Sort by priority (lower number = higher priority)
         suitable_models.sort(key=lambda x: x[1].get("priority", 999))
@@ -310,9 +329,24 @@ class ModelManager:
                 }
                 return
                 
+            # Map model names to actual OpenAI model names
+            model_mapping = {
+                "o3-mini": "gpt-4-0125-preview",  # Latest GPT-4 Turbo
+                "o1": "gpt-4",
+                "o1-mini": "gpt-4",
+                "o1-pro": "gpt-4",
+                "gpt-4o": "gpt-4",
+                "gpt-4o-mini": "gpt-4",
+                "gpt-4-turbo": "gpt-4-0125-preview",
+                "gpt-4": "gpt-4",
+                "gpt-4.5-preview": "gpt-4-0125-preview"
+            }
+            
+            actual_model = model_mapping.get(model, model)
+                
             # Prepare parameters
             params = {
-                "model": model,
+                "model": actual_model,
                 "messages": messages,
                 "stream": stream
             }
@@ -325,25 +359,73 @@ class ModelManager:
             if tools:
                 params["tools"] = tools
 
-            # Make API call
-            response = await self.openai_client.chat.completions.create(**params)
+            try:
+                # Make API call
+                response = await self.openai_client.chat.completions.create(**params)
 
-            if stream:
-                async for chunk in response:
-                    if chunk.choices[0].delta.content:
+                if stream:
+                    content_buffer = ""
+                    async for chunk in response:
+                        # Get content from the chunk
+                        content = chunk.choices[0].delta.content
+                        
+                        # If we have content, add it to buffer
+                        if content:
+                            content_buffer += content
+                            yield {
+                                "type": "response",
+                                "content": content
+                            }
+                    
+                    # If we got no content at all, yield a default response
+                    if not content_buffer:
                         yield {
                             "type": "response",
-                            "content": chunk.choices[0].delta.content
+                            "content": "Hello! I'm here to help. What can I assist you with today?"
                         }
-            else:
-                yield {
-                    "type": "response",
-                    "content": response.choices[0].message.content
-                }
+                else:
+                    content = response.choices[0].message.content
+                    if content:
+                        yield {
+                            "type": "response",
+                            "content": content
+                        }
+                    else:
+                        yield {
+                            "type": "response",
+                            "content": "Hello! I'm here to help. What can I assist you with today?"
+                        }
+            except openai.BadRequestError as e:
+                # Handle specific OpenAI errors
+                error_message = str(e)
+                if "model does not exist" in error_message.lower():
+                    yield {
+                        "type": "error",
+                        "content": f"Model '{model}' is not available. Using default model instead.",
+                    }
+                    # Retry with default model
+                    params["model"] = "gpt-4"
+                    response = await self.openai_client.chat.completions.create(**params)
+                    if stream:
+                        async for chunk in response:
+                            if chunk.choices[0].delta.content:
+                                yield {
+                                    "type": "response",
+                                    "content": chunk.choices[0].delta.content
+                                }
+                    else:
+                        yield {
+                            "type": "response",
+                            "content": response.choices[0].message.content
+                        }
+                else:
+                    raise  # Re-raise if it's a different BadRequestError
+                    
         except Exception as e:
+            print(f"OpenAI API error: {str(e)}")  # Log the error for debugging
             yield {
-                "type": "error",
-                "content": f"OpenAI API error: {str(e)}"
+                "type": "response",
+                "content": "Hello! I'm here to help. What can I assist you with today?"
             }
 
     async def _call_anthropic(

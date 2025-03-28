@@ -64,6 +64,9 @@ class BaseAssistant(ABC):
         self,
         query: str,
         temperature: float = 0.7,
+        preferred_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        model_category: Optional[str] = None,
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -74,7 +77,10 @@ class BaseAssistant(ABC):
         model = self.model_manager.select_model(
             task_type=self.task_types[0],  # Use first task type as primary
             required_capabilities=["conversation"],  # Basic capability
-            temperature=temperature
+            temperature=temperature,
+            preferred_model=preferred_model,
+            model_type=model_type,
+            model_category=model_category
         )
         
         # Prepare messages
@@ -94,6 +100,6 @@ class BaseAssistant(ABC):
             model=model,
             messages=messages,
             stream=True,
-            **kwargs
+            temperature=temperature
         ):
             yield chunk 

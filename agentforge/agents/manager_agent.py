@@ -73,7 +73,7 @@ Then select the most appropriate agent(s) to handle it."""
             # Look for General Assistant if query is not construction-related
             if "not construction-related" in chunk['content'].lower():
                 workflow = {
-                    "primary_assistant": "General Assistant",
+                    "primary_assistant": "general_assistant",
                     "supporting_assistants": []
                 }
                 break

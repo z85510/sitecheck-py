@@ -9,7 +9,7 @@ class GeneralAssistant(BaseAssistant):
         base_path: str = "agentforge"
     ):
         super().__init__(
-            name="General Assistant",
+            name="general_assistant",
             description="A general-purpose assistant that handles non-specialized queries",
             role="""You are a helpful general-purpose assistant that handles queries not requiring specialized domain knowledge.
             You provide clear, concise, and relevant responses while recognizing when to defer to specialists.""",
@@ -50,7 +50,13 @@ class GeneralAssistant(BaseAssistant):
         }
 
         # 2. Generate and stream the response
-        async for chunk in self._generate_response(query, **kwargs):
+        async for chunk in self._generate_response(
+            query=query,
+            temperature=kwargs.get("temperature", 0.7),
+            preferred_model=kwargs.get("preferred_model"),
+            model_type=kwargs.get("model_type"),
+            model_category=kwargs.get("model_category")
+        ):
             yield chunk
 
     def get_context(self) -> Dict[str, Any]:
@@ -85,12 +91,79 @@ class GeneralAssistant(BaseAssistant):
         **kwargs
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Generate a helpful general response"""
-        # Implementation would use the model manager to generate responses
-        # This is a placeholder for the actual implementation
-        yield {
-            "type": "response",
-            "content": "Let me help you with that...",
-            "agent": self.name,
-            "is_complete": True,
-            "needs_specialist": False
-        } 
+        try:
+            # Select appropriate model
+            model = self.model_manager.select_model(
+                task_type="conversation",
+                required_capabilities=["conversation"],
+                temperature=kwargs.get("temperature", 0.7),
+                preferred_model=kwargs.get("preferred_model"),
+                model_type=kwargs.get("model_type"),
+                model_category=kwargs.get("model_category")
+            )
+            
+            # Prepare messages
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"""You are a helpful general-purpose AI assistant named {self.name}.
+                    {self.role}
+                    
+                    Task Types: {', '.join(self.task_types)}
+                    
+                    For general queries and greetings:
+                    1. Provide warm, welcoming responses while maintaining professionalism
+                    2. Keep responses clear, concise, and relevant
+                    3. If a query requires specialized knowledge, indicate that in your response
+                    4. ALWAYS provide a meaningful response, even for simple greetings
+                    
+                    Always respond in a friendly and helpful manner.
+                    Never return an empty response."""
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ]
+            
+            # Generate response
+            response_started = False
+            async for chunk in self.model_manager.call_with_tools(
+                model=model,
+                messages=messages,
+                stream=True,
+                temperature=kwargs.get("temperature", 0.7)
+            ):
+                if chunk["type"] == "response":
+                    if chunk.get("content"):  # Only yield non-empty content
+                        response_started = True
+                        yield {
+                            "type": "response",
+                            "content": chunk["content"],
+                            "agent": self.name,
+                            "is_complete": True,
+                            "needs_specialist": False
+                        }
+                else:
+                    yield chunk
+                    
+            # If no response was generated, provide a default response
+            if not response_started:
+                yield {
+                    "type": "response",
+                    "content": "I understand your message and I'm here to help. Could you please provide more details about what you'd like assistance with?",
+                    "agent": self.name,
+                    "is_complete": True,
+                    "needs_specialist": False
+                }
+                
+        except Exception as e:
+            # Log the error and provide a friendly error response
+            print(f"Error generating response: {str(e)}")
+            yield {
+                "type": "response",
+                "content": "I apologize, but I encountered an issue while processing your request. Could you please try rephrasing your question?",
+                "agent": self.name,
+                "is_complete": True,
+                "needs_specialist": False
+            } 

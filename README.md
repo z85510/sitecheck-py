@@ -154,27 +154,115 @@ curl -N -X POST http://127.0.0.1:8001/query \
 
 ## API Endpoints
 
-### POST /query
-Send a query to the AI assistant system.
+### Query Parameters
 
-**Request Body:**
+Both the `/query` and `/stream_process` endpoints accept the following parameters in their request body:
+
 ```json
 {
-  "query": "string",
-  "force_agent": "string (optional)",
-  "temperature": "float (optional, default: 0.7)"
+    "query": "Your query text here",
+    "agent": "General Assistant",
+    "temperature": 0.7,
+    "preferred_model": "gpt-4o-mini",
+    "model_type": "default",
+    "model_category": "cost-optimized"
 }
 ```
 
-**Response:**
-Streams JSON objects with the following structure:
+#### Required Parameters
+
+- `query` (string)
+  - The text query to be processed by the AI agent
+  - Required for all requests
+
+#### Optional Parameters
+
+- `agent` (string)
+  - Default: "General Assistant"
+  - Available options:
+    - "General Assistant": General purpose AI assistant
+    - "Construction Meeting Assistant": Construction meeting specialist
+    - "Safety Assistant": Safety and compliance specialist
+
+- `temperature` (float)
+  - Controls randomness in the response
+  - Range: 0.0 to 1.0
+  - Default: 0.7
+  - Lower values: more focused and deterministic
+  - Higher values: more creative and varied
+
+- `preferred_model` (string)
+  - Specific model to use for the response
+  - Default: "gpt-4o-mini"
+  - Examples:
+    - "gpt-4o-mini": Default OpenAI model (cost-optimized)
+    - "o3-mini": Claude 3 Opus (reasoning)
+    - "gpt-4o": GPT-4 Turbo (flagship)
+
+- `model_type` (string)
+  - Type of model to use
+  - Default: "default"
+  - Options:
+    - "default": Standard processing
+    - "reasoning": Enhanced analytical capabilities
+
+- `model_category` (string)
+  - Category of model to use
+  - Default: "cost-optimized"
+  - Options:
+    - "reasoning": Best for complex analysis
+    - "flagship": Best quality but expensive
+    - "cost-optimized": Good balance of quality and cost
+    - "legacy": Older models
+    - "claude": Anthropic models
+
+### Example Requests
+
+#### Minimal Request
 ```json
 {
-  "type": "thinking|response|error",
-  "content": "message content",
-  "agent": "agent name"
+    "query": "Hello"
 }
 ```
+
+#### Full Request with All Parameters
+```json
+{
+    "query": "Create a safety meeting agenda",
+    "agent": "Safety Assistant",
+    "temperature": 0.7,
+    "preferred_model": "o3-mini",
+    "model_type": "reasoning",
+    "model_category": "flagship"
+}
+```
+
+### Streaming Response Format
+
+When using the `/stream_process` endpoint, responses are returned as Server-Sent Events (SSE) with the following format:
+
+```
+data: {"type": "thinking", "content": "Processing your request..."}\n\n
+data: {"type": "response", "content": "First part of response..."}\n\n
+data: {"type": "response", "content": "Next part of response..."}\n\n
+data: [DONE]\n\n
+```
+
+#### Response Types
+- `thinking`: Initial acknowledgment
+- `response`: Actual content chunks
+- `error`: Error messages if something goes wrong
+- `[DONE]`: Stream completion marker
+
+### Error Responses
+
+If an error occurs, the API will return a JSON response with:
+- HTTP status code (404 for not found, 500 for server errors)
+- Error details including:
+  - Error message
+  - Available agents list
+  - Suggestions for correction
+  - Stack trace (in development mode)
 
 ## Development
 
